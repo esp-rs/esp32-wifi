@@ -1,0 +1,69 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // more info at: https://github.com/Marus/cortex-debug/blob/master/package.json
+            "name": "Attach",
+            "type": "cortex-debug",
+            "request": "attach", // attach instead of launch, because otherwise flash write is attempted, but fails
+            "cwd": "${workspaceRoot}",
+            "executable": "target/current.elf",
+            "servertype": "openocd",
+            "interface": "jtag",
+            "svdFile": "../esp32/svd/esp32.svd",
+            "toolchainPrefix": "xtensa-esp32-elf",
+            "openOCDPreConfigLaunchCommands": [
+                "set ESP_RTOS none"
+            ],
+            "configFiles": [
+                "board/esp32-wrover-kit-3.3v.cfg"
+            ],
+            "overrideAttachCommands": [
+                "set remote hardware-watchpoint-limit 2",
+                "mon halt",
+                "flushregs"
+            ],
+            "overrideRestartCommands": [
+                "mon reset halt",
+                "flushregs",
+                "c",
+            ]
+        },
+        {
+            // more info at: https://github.com/Marus/cortex-debug/blob/master/package.json
+            "name": "Flash & Launch",
+            "type": "cortex-debug",
+            "preLaunchTask": "Build Example",
+            "request": "launch", // attach instead of launch, because otherwise flash write is attempted, but fails
+            "cwd": "${workspaceRoot}",
+            "executable": "target/current.elf",
+            "servertype": "openocd",
+            "interface": "jtag",
+            "svdFile": "../esp32/svd/esp32.svd",
+            "toolchainPrefix": "xtensa-esp32-elf",
+            "openOCDPreConfigLaunchCommands": [
+                "set ESP_RTOS none"
+            ],
+            "configFiles": [
+                "board/esp32-wrover-kit-3.3v.cfg"
+            ],
+            "overrideLaunchCommands": [
+                "mon program_esp32 target/current.bin 0x10000 verify reset hex",
+                "flushregs",
+            ],
+            "postStartSessionCommands": [
+                "thb main",
+                "continue"
+            ],
+            "overrideRestartCommands": [
+                "mon program_esp32 target/current.bin 0x10000 verify reset hex",
+                "flushregs",
+                "thb main",
+                "continue",
+            ]
+        },
+    ]
+}

@@ -1,0 +1,103 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558 
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build and Flash Example",
+            "type": "shell",
+            "runOptions": {
+                "reevaluateOnRerun": false
+            },
+            "command": "../esp32-hal/flash -t --example ${input:example}",
+            "problemMatcher": {
+                "base": "$rustc",
+                "fileLocation": [
+                    "relative"
+                ]
+            },
+            "group": "build",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Build Example",
+            "type": "shell",
+            "runOptions": {
+                "reevaluateOnRerun": false
+            },
+            "command": "../esp32-hal/flash -s --example ${input:example}",
+            "problemMatcher": {
+                "base": "$rustc",
+                "fileLocation": [
+                    "relative"
+                ]
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Compile All Examples",
+            "type": "shell",
+            "command": "cargo xbuild --examples",
+            "problemMatcher": {
+                "base": "$rustc",
+                "fileLocation": [
+                    "relative"
+                ]
+            },
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Build Documentation",
+            "type": "shell",
+            "command": "cargo xdoc --open --all-features",
+            "problemMatcher": {
+                "base": "$rustc",
+                "fileLocation": [
+                    "relative"
+                ]
+            },
+            "group": "build",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared",
+                "clear": true
+            }
+        }
+    ],
+    "inputs": [
+        // requires Tasks Shell Input extension
+        {
+            "id": "example",
+            "type": "command",
+            "command": "shellCommand.execute",
+            "args": {
+                "command": "cargo check --offline --example 2>&1 |egrep '^ '| sed -E 's/[ \t]*//g'",
+                "cwd": "${workspaceFolder}/../esp32-wifi"
+            }
+        },
+        // alternatively type in manually
+        {
+            "id": "examplePrompt",
+            "description": "Example:",
+            "default": "serial",
+            "type": "promptString"
+        }
+    ]
+}

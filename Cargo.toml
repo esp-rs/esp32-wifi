@@ -1,0 +1,10 @@
+[package]
+name = "esp32-wifi"
+version = "0.1.0"
+authors = ["Arjan Mels <arjan@mels.email>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+esp32-hal = { path = "../esp32-hal" }
