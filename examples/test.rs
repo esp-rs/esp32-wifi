@@ -73,6 +73,34 @@ fn main() -> ! {
             esp32_wifi::binary::phy::phy_get_rf_cal_version()
         )
         .unwrap();
+        writeln!(
+            serial,
+            "Wifi set_log_level result: {:8x}",
+            esp32_wifi::binary::wifi::esp_wifi_internal_set_log_level(
+                esp32_wifi::binary::wifi::wifi_log_level_t::WIFI_LOG_VERBOSE
+            )
+        )
+        .unwrap();
+        writeln!(
+            serial,
+            "Wifi set_log_mod result: {:8x}",
+            esp32_wifi::binary::wifi::esp_wifi_internal_set_log_mod(
+                esp32_wifi::binary::wifi::wifi_log_module_t::WIFI_LOG_MODULE_ALL,
+                0,
+                true
+            )
+        )
+        .unwrap();
+
+        esp32_wifi::wifi::WiFi::new(clkcntrl_config);
+
+        // Needed to force inclusion of compatibility module: have not found other way yet.
+        writeln!(
+            serial,
+            "Wifi set_log_mod result: {:?}",
+            esp32_wifi::compatibility::implicit::WIFI_EVENT
+        )
+        .unwrap();
     }
 
     loop {

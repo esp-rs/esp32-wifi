@@ -1,6 +1,0 @@
-/target
-procmacros/target
-**/*.rs.bk
-Cargo.lock
-.vscode/.cortex-debug*
-core

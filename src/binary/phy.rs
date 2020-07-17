@@ -23,13 +23,16 @@ pub struct esp_phy_calibration_data_t {
     #[doc = "< calibration data"]
     pub opaque: [u8; 1894usize],
 }
-#[doc = "< Do part of RF calibration. This should be used after power-on reset."]
-pub const PHY_RF_CAL_PARTIAL: esp_phy_calibration_mode_t = 0;
-#[doc = "< Don't do any RF calibration. This mode is only suggested to be used after deep sleep reset."]
-pub const PHY_RF_CAL_NONE: esp_phy_calibration_mode_t = 1;
-#[doc = "< Do full RF calibration. Produces best results, but also consumes a lot of time and current. Suggested to be used once."]
-pub const PHY_RF_CAL_FULL: esp_phy_calibration_mode_t = 2;
-pub type esp_phy_calibration_mode_t = u32;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum esp_phy_calibration_mode_t {
+    #[doc = "< Do part of RF calibration. This should be used after power-on reset."]
+    PHY_RF_CAL_PARTIAL = 0,
+    #[doc = "< Don't do any RF calibration. This mode is only suggested to be used after deep sleep reset."]
+    PHY_RF_CAL_NONE = 1,
+    #[doc = "< Do full RF calibration. Produces best results, but also consumes a lot of time and current. Suggested to be used once."]
+    PHY_RF_CAL_FULL = 2,
+}
 extern "C" {
     #[doc = " @brief Return ROM function pointer table from PHY library."]
     pub fn phy_get_romfunc_addr();

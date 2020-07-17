@@ -48,11 +48,14 @@ pub struct coex_adapter_funcs_t {
     pub _esp_timer_get_time: ::core::option::Option<unsafe extern "C" fn() -> i64>,
     pub _magic: i32,
 }
-pub const COEX_PREFER_WIFI: coex_prefer_t = 0;
-pub const COEX_PREFER_BT: coex_prefer_t = 1;
-pub const COEX_PREFER_BALANCE: coex_prefer_t = 2;
-pub const COEX_PREFER_NUM: coex_prefer_t = 3;
-pub type coex_prefer_t = u32;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum coex_prefer_t {
+    COEX_PREFER_WIFI = 0,
+    COEX_PREFER_BT = 1,
+    COEX_PREFER_BALANCE = 2,
+    COEX_PREFER_NUM = 3,
+}
 pub type coex_func_cb_t =
     ::core::option::Option<unsafe extern "C" fn(event: u32, sched_cnt: cty::c_int)>;
 extern "C" {

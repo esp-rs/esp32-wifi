@@ -13,86 +13,92 @@ pub type __uint64_t = cty::c_ulong;
 pub type va_list = __builtin_va_list;
 pub type TickType_t = u32;
 pub type esp_err_t = i32;
-#[doc = "< ESP32 station interface"]
-pub const ESP_IF_WIFI_STA: esp_interface_t = 0;
-#[doc = "< ESP32 soft-AP interface"]
-pub const ESP_IF_WIFI_AP: esp_interface_t = 1;
-#[doc = "< ESP32 ethernet interface"]
-pub const ESP_IF_ETH: esp_interface_t = 2;
-pub const ESP_IF_MAX: esp_interface_t = 3;
-pub type esp_interface_t = u32;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum esp_interface_t {
+    #[doc = "< ESP32 station interface"]
+    ESP_IF_WIFI_STA = 0,
+    #[doc = "< ESP32 soft-AP interface"]
+    ESP_IF_WIFI_AP = 1,
+    #[doc = "< ESP32 ethernet interface"]
+    ESP_IF_ETH = 2,
+    ESP_IF_MAX = 3,
+}
 pub type esp_event_base_t = *const cty::c_char;
 pub use self::esp_interface_t as wifi_interface_t;
-#[doc = "< 1 Mbps with long preamble"]
-pub const WIFI_PHY_RATE_1M_L: wifi_phy_rate_t = 0;
-#[doc = "< 2 Mbps with long preamble"]
-pub const WIFI_PHY_RATE_2M_L: wifi_phy_rate_t = 1;
-#[doc = "< 5.5 Mbps with long preamble"]
-pub const WIFI_PHY_RATE_5M_L: wifi_phy_rate_t = 2;
-#[doc = "< 11 Mbps with long preamble"]
-pub const WIFI_PHY_RATE_11M_L: wifi_phy_rate_t = 3;
-#[doc = "< 2 Mbps with short preamble"]
-pub const WIFI_PHY_RATE_2M_S: wifi_phy_rate_t = 5;
-#[doc = "< 5.5 Mbps with short preamble"]
-pub const WIFI_PHY_RATE_5M_S: wifi_phy_rate_t = 6;
-#[doc = "< 11 Mbps with short preamble"]
-pub const WIFI_PHY_RATE_11M_S: wifi_phy_rate_t = 7;
-#[doc = "< 48 Mbps"]
-pub const WIFI_PHY_RATE_48M: wifi_phy_rate_t = 8;
-#[doc = "< 24 Mbps"]
-pub const WIFI_PHY_RATE_24M: wifi_phy_rate_t = 9;
-#[doc = "< 12 Mbps"]
-pub const WIFI_PHY_RATE_12M: wifi_phy_rate_t = 10;
-#[doc = "< 6 Mbps"]
-pub const WIFI_PHY_RATE_6M: wifi_phy_rate_t = 11;
-#[doc = "< 54 Mbps"]
-pub const WIFI_PHY_RATE_54M: wifi_phy_rate_t = 12;
-#[doc = "< 36 Mbps"]
-pub const WIFI_PHY_RATE_36M: wifi_phy_rate_t = 13;
-#[doc = "< 18 Mbps"]
-pub const WIFI_PHY_RATE_18M: wifi_phy_rate_t = 14;
-#[doc = "< 9 Mbps"]
-pub const WIFI_PHY_RATE_9M: wifi_phy_rate_t = 15;
-#[doc = "< MCS0 with long GI, 6.5 Mbps for 20MHz, 13.5 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS0_LGI: wifi_phy_rate_t = 16;
-#[doc = "< MCS1 with long GI, 13 Mbps for 20MHz, 27 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS1_LGI: wifi_phy_rate_t = 17;
-#[doc = "< MCS2 with long GI, 19.5 Mbps for 20MHz, 40.5 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS2_LGI: wifi_phy_rate_t = 18;
-#[doc = "< MCS3 with long GI, 26 Mbps for 20MHz, 54 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS3_LGI: wifi_phy_rate_t = 19;
-#[doc = "< MCS4 with long GI, 39 Mbps for 20MHz, 81 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS4_LGI: wifi_phy_rate_t = 20;
-#[doc = "< MCS5 with long GI, 52 Mbps for 20MHz, 108 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS5_LGI: wifi_phy_rate_t = 21;
-#[doc = "< MCS6 with long GI, 58.5 Mbps for 20MHz, 121.5 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS6_LGI: wifi_phy_rate_t = 22;
-#[doc = "< MCS7 with long GI, 65 Mbps for 20MHz, 135 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS7_LGI: wifi_phy_rate_t = 23;
-#[doc = "< MCS0 with short GI, 7.2 Mbps for 20MHz, 15 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS0_SGI: wifi_phy_rate_t = 24;
-#[doc = "< MCS1 with short GI, 14.4 Mbps for 20MHz, 30 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS1_SGI: wifi_phy_rate_t = 25;
-#[doc = "< MCS2 with short GI, 21.7 Mbps for 20MHz, 45 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS2_SGI: wifi_phy_rate_t = 26;
-#[doc = "< MCS3 with short GI, 28.9 Mbps for 20MHz, 60 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS3_SGI: wifi_phy_rate_t = 27;
-#[doc = "< MCS4 with short GI, 43.3 Mbps for 20MHz, 90 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS4_SGI: wifi_phy_rate_t = 28;
-#[doc = "< MCS5 with short GI, 57.8 Mbps for 20MHz, 120 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS5_SGI: wifi_phy_rate_t = 29;
-#[doc = "< MCS6 with short GI, 65 Mbps for 20MHz, 135 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS6_SGI: wifi_phy_rate_t = 30;
-#[doc = "< MCS7 with short GI, 72.2 Mbps for 20MHz, 150 Mbps for 40MHz"]
-pub const WIFI_PHY_RATE_MCS7_SGI: wifi_phy_rate_t = 31;
-#[doc = "< 250 Kbps"]
-pub const WIFI_PHY_RATE_LORA_250K: wifi_phy_rate_t = 41;
-#[doc = "< 500 Kbps"]
-pub const WIFI_PHY_RATE_LORA_500K: wifi_phy_rate_t = 42;
-pub const WIFI_PHY_RATE_MAX: wifi_phy_rate_t = 43;
+#[repr(u32)]
 #[doc = " @brief WiFi PHY rate encodings"]
 #[doc = ""]
-pub type wifi_phy_rate_t = u32;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_phy_rate_t {
+    #[doc = "< 1 Mbps with long preamble"]
+    WIFI_PHY_RATE_1M_L = 0,
+    #[doc = "< 2 Mbps with long preamble"]
+    WIFI_PHY_RATE_2M_L = 1,
+    #[doc = "< 5.5 Mbps with long preamble"]
+    WIFI_PHY_RATE_5M_L = 2,
+    #[doc = "< 11 Mbps with long preamble"]
+    WIFI_PHY_RATE_11M_L = 3,
+    #[doc = "< 2 Mbps with short preamble"]
+    WIFI_PHY_RATE_2M_S = 5,
+    #[doc = "< 5.5 Mbps with short preamble"]
+    WIFI_PHY_RATE_5M_S = 6,
+    #[doc = "< 11 Mbps with short preamble"]
+    WIFI_PHY_RATE_11M_S = 7,
+    #[doc = "< 48 Mbps"]
+    WIFI_PHY_RATE_48M = 8,
+    #[doc = "< 24 Mbps"]
+    WIFI_PHY_RATE_24M = 9,
+    #[doc = "< 12 Mbps"]
+    WIFI_PHY_RATE_12M = 10,
+    #[doc = "< 6 Mbps"]
+    WIFI_PHY_RATE_6M = 11,
+    #[doc = "< 54 Mbps"]
+    WIFI_PHY_RATE_54M = 12,
+    #[doc = "< 36 Mbps"]
+    WIFI_PHY_RATE_36M = 13,
+    #[doc = "< 18 Mbps"]
+    WIFI_PHY_RATE_18M = 14,
+    #[doc = "< 9 Mbps"]
+    WIFI_PHY_RATE_9M = 15,
+    #[doc = "< MCS0 with long GI, 6.5 Mbps for 20MHz, 13.5 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS0_LGI = 16,
+    #[doc = "< MCS1 with long GI, 13 Mbps for 20MHz, 27 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS1_LGI = 17,
+    #[doc = "< MCS2 with long GI, 19.5 Mbps for 20MHz, 40.5 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS2_LGI = 18,
+    #[doc = "< MCS3 with long GI, 26 Mbps for 20MHz, 54 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS3_LGI = 19,
+    #[doc = "< MCS4 with long GI, 39 Mbps for 20MHz, 81 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS4_LGI = 20,
+    #[doc = "< MCS5 with long GI, 52 Mbps for 20MHz, 108 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS5_LGI = 21,
+    #[doc = "< MCS6 with long GI, 58.5 Mbps for 20MHz, 121.5 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS6_LGI = 22,
+    #[doc = "< MCS7 with long GI, 65 Mbps for 20MHz, 135 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS7_LGI = 23,
+    #[doc = "< MCS0 with short GI, 7.2 Mbps for 20MHz, 15 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS0_SGI = 24,
+    #[doc = "< MCS1 with short GI, 14.4 Mbps for 20MHz, 30 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS1_SGI = 25,
+    #[doc = "< MCS2 with short GI, 21.7 Mbps for 20MHz, 45 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS2_SGI = 26,
+    #[doc = "< MCS3 with short GI, 28.9 Mbps for 20MHz, 60 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS3_SGI = 27,
+    #[doc = "< MCS4 with short GI, 43.3 Mbps for 20MHz, 90 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS4_SGI = 28,
+    #[doc = "< MCS5 with short GI, 57.8 Mbps for 20MHz, 120 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS5_SGI = 29,
+    #[doc = "< MCS6 with short GI, 65 Mbps for 20MHz, 135 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS6_SGI = 30,
+    #[doc = "< MCS7 with short GI, 72.2 Mbps for 20MHz, 150 Mbps for 40MHz"]
+    WIFI_PHY_RATE_MCS7_SGI = 31,
+    #[doc = "< 250 Kbps"]
+    WIFI_PHY_RATE_LORA_250K = 41,
+    #[doc = "< 500 Kbps"]
+    WIFI_PHY_RATE_LORA_500K = 42,
+    WIFI_PHY_RATE_MAX = 43,
+}
 #[doc = " Event handler function type"]
 pub type system_event_handler_t = ::core::option::Option<
     unsafe extern "C" fn(
@@ -788,21 +794,27 @@ pub union wifi_ioctl_config_t__bindgen_ty_1 {
     pub ht2040_coex: wifi_ht2040_coex_t,
     _bindgen_union_align: u32,
 }
-pub const WIFI_LOG_ERROR: wifi_log_level_t = 0;
-pub const WIFI_LOG_WARNING: wifi_log_level_t = 1;
-pub const WIFI_LOG_INFO: wifi_log_level_t = 2;
-pub const WIFI_LOG_DEBUG: wifi_log_level_t = 3;
-pub const WIFI_LOG_VERBOSE: wifi_log_level_t = 4;
+#[repr(u32)]
 #[doc = " @brief WiFi log level"]
 #[doc = ""]
-pub type wifi_log_level_t = u32;
-pub const WIFI_LOG_MODULE_ALL: wifi_log_module_t = 0;
-pub const WIFI_LOG_MODULE_WIFI: wifi_log_module_t = 1;
-pub const WIFI_LOG_MODULE_COEX: wifi_log_module_t = 2;
-pub const WIFI_LOG_MODULE_MESH: wifi_log_module_t = 3;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_log_level_t {
+    WIFI_LOG_ERROR = 0,
+    WIFI_LOG_WARNING = 1,
+    WIFI_LOG_INFO = 2,
+    WIFI_LOG_DEBUG = 3,
+    WIFI_LOG_VERBOSE = 4,
+}
+#[repr(u32)]
 #[doc = " @brief WiFi log module definition"]
 #[doc = ""]
-pub type wifi_log_module_t = u32;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_log_module_t {
+    WIFI_LOG_MODULE_ALL = 0,
+    WIFI_LOG_MODULE_WIFI = 1,
+    WIFI_LOG_MODULE_COEX = 2,
+    WIFI_LOG_MODULE_MESH = 3,
+}
 extern "C" {
     #[doc = " @brief Initialize Wi-Fi Driver"]
     #[doc = "     Alloc resource for WiFi driver, such as WiFi control structure, RX/TX buffer,"]
