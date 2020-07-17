@@ -6,6 +6,14 @@ Contributions are welcome :)
 
 Join in on the discussion: https://matrix.to/#/#esp-rs:matrix.org!
 
+## Building
+
+This crate uses the esp-idf binary blobs for wifi functionality. The C foreign function interface is generated with bindgen. This is done using the generate/bindgen.sh script, but only needs to be done again when the version of the binary blobs is changed.
+
+The generate/bindgen.sh can be called from the root directory to create the various files in 
+src/binary. The version of esp-idf used should match the version of the binary blobs in the 
+esp32-wifi-lib sub-repository. (Currently version v4.1 of the esp-idf is used.)
+
 ## License
 
 Licensed under either of

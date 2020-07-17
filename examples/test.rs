@@ -2,6 +2,7 @@
 #![no_main]
 
 use core::{fmt::Write, panic::PanicInfo};
+use cstr_core::CStr;
 
 use esp32_hal::{
     clock_control::{sleep, ClockControl, XTAL_FREQUENCY_AUTO},
@@ -12,8 +13,6 @@ use esp32_hal::{
     target,
     timer::Timer,
 };
-
-const BLINK_HZ: Hertz = Hertz(2);
 
 #[entry]
 fn main() -> ! {
@@ -39,11 +38,8 @@ fn main() -> ! {
 
     let pins = dp.GPIO.split();
 
-    let mut blinky = pins.gpio0.into_push_pull_output();
-
-    // Use UART1 as example: will cause dprintln statements not to be printed
-    let serial: Serial<_, _, _> = Serial::new(
-        dp.UART1,
+    let mut serial: Serial<_, _, _> = Serial::new(
+        dp.UART0,
         Pins {
             tx: pins.gpio1,
             rx: pins.gpio3,
@@ -60,25 +56,27 @@ fn main() -> ! {
     )
     .unwrap();
 
-    let (mut tx, mut rx) = serial.split();
+    writeln!(serial, "\n\nESP32 Started\n\n").unwrap();
 
-    writeln!(tx, "\n\nESP32 Started\n\n").unwrap();
-
-    // line will not be printed as using UART1
-    dprintln!("UART0\n");
+    unsafe {
+        writeln!(
+            serial,
+            "Coexist library version: {}",
+            CStr::from_ptr(esp32_wifi::binary::coexist::coex_version_get())
+                .to_str()
+                .unwrap()
+        )
+        .unwrap();
+        writeln!(
+            serial,
+            "Phy RF calibration data version: {}",
+            esp32_wifi::binary::phy::phy_get_rf_cal_version()
+        )
+        .unwrap();
+    }
 
     loop {
-        writeln!(tx, "Characters received:  {:?}", rx.count()).unwrap();
-
-        while let Ok(x) = rx.read() {
-            write!(tx, "{} ({:#x}) ", if x >= 32 { x as char } else { '?' }, x).unwrap()
-        }
-        writeln!(tx, "").unwrap();
-
-        blinky.set_high().unwrap();
-        sleep((Hertz(1_000_000) / BLINK_HZ).us());
-        blinky.set_low().unwrap();
-        sleep((Hertz(1_000_000) / BLINK_HZ).us());
+        sleep(1.s());
     }
 }
 
