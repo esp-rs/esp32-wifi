@@ -18,9 +18,12 @@ bindgen $BASE/esp_wifi/include/phy.h -o src/binary/phy.rs \
     --whitelist-function "phy.*" --whitelist-function "coex.*" --whitelist-function ".*_phy" \
     $BINDGEN_OPTS $BINDGEN_CLANG_OPTS
 
+WIFI_FUNCTIONS=$(xtensa-esp32-elf-objdump -t esp32-wifi-lib/esp32/libnet80211.a |grep esp_wifi|grep -v internal|grep "F .text"| awk '{printf("%s|",$6)}')
+
 echo "Generating wifi.rs"
-bindgen $BASE/esp_wifi/include/esp_private/wifi.h  -o src/binary/wifi.rs \
-    --whitelist-function ".*wifi.*internal.*" \
+bindgen generate/wifi_wrapper.h  -o src/binary/wifi.rs \
+    --with-derive-default \
+    --whitelist-function $WIFI_FUNCTIONS"(.*wifi.*internal.*)" \
     $BINDGEN_OPTS $BINDGEN_CLANG_OPTS
 
 echo "Generating coexist.rs"

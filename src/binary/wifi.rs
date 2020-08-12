@@ -3,6 +3,117 @@
 #![allow(non_camel_case_types)]
 #![allow(intra_doc_link_resolution_failure)]
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct __BindgenBitfieldUnit<Storage, Align> {
+    storage: Storage,
+    align: [Align; 0],
+}
+impl<Storage, Align> __BindgenBitfieldUnit<Storage, Align> {
+    #[inline]
+    pub const fn new(storage: Storage) -> Self {
+        Self { storage, align: [] }
+    }
+}
+impl<Storage, Align> __BindgenBitfieldUnit<Storage, Align>
+where
+    Storage: AsRef<[u8]> + AsMut<[u8]>,
+{
+    #[inline]
+    pub fn get_bit(&self, index: usize) -> bool {
+        debug_assert!(index / 8 < self.storage.as_ref().len());
+        let byte_index = index / 8;
+        let byte = self.storage.as_ref()[byte_index];
+        let bit_index = if cfg!(target_endian = "big") {
+            7 - (index % 8)
+        } else {
+            index % 8
+        };
+        let mask = 1 << bit_index;
+        byte & mask == mask
+    }
+    #[inline]
+    pub fn set_bit(&mut self, index: usize, val: bool) {
+        debug_assert!(index / 8 < self.storage.as_ref().len());
+        let byte_index = index / 8;
+        let byte = &mut self.storage.as_mut()[byte_index];
+        let bit_index = if cfg!(target_endian = "big") {
+            7 - (index % 8)
+        } else {
+            index % 8
+        };
+        let mask = 1 << bit_index;
+        if val {
+            *byte |= mask;
+        } else {
+            *byte &= !mask;
+        }
+    }
+    #[inline]
+    pub fn get(&self, bit_offset: usize, bit_width: u8) -> u64 {
+        debug_assert!(bit_width <= 64);
+        debug_assert!(bit_offset / 8 < self.storage.as_ref().len());
+        debug_assert!((bit_offset + (bit_width as usize)) / 8 <= self.storage.as_ref().len());
+        let mut val = 0;
+        for i in 0..(bit_width as usize) {
+            if self.get_bit(i + bit_offset) {
+                let index = if cfg!(target_endian = "big") {
+                    bit_width as usize - 1 - i
+                } else {
+                    i
+                };
+                val |= 1 << index;
+            }
+        }
+        val
+    }
+    #[inline]
+    pub fn set(&mut self, bit_offset: usize, bit_width: u8, val: u64) {
+        debug_assert!(bit_width <= 64);
+        debug_assert!(bit_offset / 8 < self.storage.as_ref().len());
+        debug_assert!((bit_offset + (bit_width as usize)) / 8 <= self.storage.as_ref().len());
+        for i in 0..(bit_width as usize) {
+            let mask = 1 << i;
+            let val_bit_is_set = val & mask == mask;
+            let index = if cfg!(target_endian = "big") {
+                bit_width as usize - 1 - i
+            } else {
+                i
+            };
+            self.set_bit(index + bit_offset, val_bit_is_set);
+        }
+    }
+}
+#[repr(C)]
+#[derive(Default)]
+pub struct __IncompleteArrayField<T>(::core::marker::PhantomData<T>, [T; 0]);
+impl<T> __IncompleteArrayField<T> {
+    #[inline]
+    pub const fn new() -> Self {
+        __IncompleteArrayField(::core::marker::PhantomData, [])
+    }
+    #[inline]
+    pub fn as_ptr(&self) -> *const T {
+        self as *const _ as *const T
+    }
+    #[inline]
+    pub fn as_mut_ptr(&mut self) -> *mut T {
+        self as *mut _ as *mut T
+    }
+    #[inline]
+    pub unsafe fn as_slice(&self, len: usize) -> &[T] {
+        ::core::slice::from_raw_parts(self.as_ptr(), len)
+    }
+    #[inline]
+    pub unsafe fn as_mut_slice(&mut self, len: usize) -> &mut [T] {
+        ::core::slice::from_raw_parts_mut(self.as_mut_ptr(), len)
+    }
+}
+impl<T> ::core::fmt::Debug for __IncompleteArrayField<T> {
+    fn fmt(&self, fmt: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        fmt.write_str("__IncompleteArrayField")
+    }
+}
 pub type __int8_t = cty::c_schar;
 pub type __uint8_t = cty::c_uchar;
 pub type __uint16_t = cty::c_ushort;
@@ -11,8 +122,8 @@ pub type __uint32_t = cty::c_uint;
 pub type __int64_t = cty::c_long;
 pub type __uint64_t = cty::c_ulong;
 pub type va_list = __builtin_va_list;
-pub type TickType_t = u32;
 pub type esp_err_t = i32;
+pub type TickType_t = u32;
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum esp_interface_t {
@@ -25,7 +136,1094 @@ pub enum esp_interface_t {
     ESP_IF_MAX = 3,
 }
 pub type esp_event_base_t = *const cty::c_char;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_mode_t {
+    #[doc = "< null mode"]
+    WIFI_MODE_NULL = 0,
+    #[doc = "< WiFi station mode"]
+    WIFI_MODE_STA = 1,
+    #[doc = "< WiFi soft-AP mode"]
+    WIFI_MODE_AP = 2,
+    #[doc = "< WiFi station + soft-AP mode"]
+    WIFI_MODE_APSTA = 3,
+    WIFI_MODE_MAX = 4,
+}
 pub use self::esp_interface_t as wifi_interface_t;
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_country_policy_t {
+    #[doc = "< Country policy is auto, use the country info of AP to which the station is connected"]
+    WIFI_COUNTRY_POLICY_AUTO = 0,
+    #[doc = "< Country policy is manual, always use the configured country info"]
+    WIFI_COUNTRY_POLICY_MANUAL = 1,
+}
+#[doc = " @brief Structure describing WiFi country-based regional restrictions."]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct wifi_country_t {
+    #[doc = "< country code string"]
+    pub cc: [cty::c_char; 3usize],
+    #[doc = "< start channel"]
+    pub schan: u8,
+    #[doc = "< total channel number"]
+    pub nchan: u8,
+    #[doc = "< This field is used for getting WiFi maximum transmitting power, call esp_wifi_set_max_tx_power to set the maximum transmitting power."]
+    pub max_tx_power: i8,
+    #[doc = "< country policy"]
+    pub policy: wifi_country_policy_t,
+}
+impl Default for wifi_country_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_auth_mode_t {
+    #[doc = "< authenticate mode : open"]
+    WIFI_AUTH_OPEN = 0,
+    #[doc = "< authenticate mode : WEP"]
+    WIFI_AUTH_WEP = 1,
+    #[doc = "< authenticate mode : WPA_PSK"]
+    WIFI_AUTH_WPA_PSK = 2,
+    #[doc = "< authenticate mode : WPA2_PSK"]
+    WIFI_AUTH_WPA2_PSK = 3,
+    #[doc = "< authenticate mode : WPA_WPA2_PSK"]
+    WIFI_AUTH_WPA_WPA2_PSK = 4,
+    #[doc = "< authenticate mode : WPA2_ENTERPRISE"]
+    WIFI_AUTH_WPA2_ENTERPRISE = 5,
+    #[doc = "< authenticate mode : WPA3_PSK"]
+    WIFI_AUTH_WPA3_PSK = 6,
+    WIFI_AUTH_MAX = 7,
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_second_chan_t {
+    #[doc = "< the channel width is HT20"]
+    WIFI_SECOND_CHAN_NONE = 0,
+    #[doc = "< the channel width is HT40 and the secondary channel is above the primary channel"]
+    WIFI_SECOND_CHAN_ABOVE = 1,
+    #[doc = "< the channel width is HT40 and the secondary channel is below the primary channel"]
+    WIFI_SECOND_CHAN_BELOW = 2,
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_scan_type_t {
+    #[doc = "< active scan"]
+    WIFI_SCAN_TYPE_ACTIVE = 0,
+    #[doc = "< passive scan"]
+    WIFI_SCAN_TYPE_PASSIVE = 1,
+}
+#[doc = " @brief Range of active scan times per channel"]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_active_scan_time_t {
+    #[doc = "< minimum active scan time per channel, units: millisecond"]
+    pub min: u32,
+    #[doc = "< maximum active scan time per channel, units: millisecond, values above 1500ms may"]
+    #[doc = "cause station to disconnect from AP and are not recommended."]
+    pub max: u32,
+}
+#[doc = " @brief Aggregate of active & passive scan time per channel"]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_scan_time_t {
+    #[doc = "< active scan time per channel, units: millisecond."]
+    pub active: wifi_active_scan_time_t,
+    #[doc = "< passive scan time per channel, units: millisecond, values above 1500ms may"]
+    #[doc = "cause station to disconnect from AP and are not recommended."]
+    pub passive: u32,
+}
+#[doc = " @brief Parameters for an SSID scan."]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct wifi_scan_config_t {
+    #[doc = "< SSID of AP"]
+    pub ssid: *mut u8,
+    #[doc = "< MAC address of AP"]
+    pub bssid: *mut u8,
+    #[doc = "< channel, scan the specific channel"]
+    pub channel: u8,
+    #[doc = "< enable to scan AP whose SSID is hidden"]
+    pub show_hidden: bool,
+    #[doc = "< scan type, active or passive"]
+    pub scan_type: wifi_scan_type_t,
+    #[doc = "< scan time per channel"]
+    pub scan_time: wifi_scan_time_t,
+}
+impl Default for wifi_scan_config_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_cipher_type_t {
+    #[doc = "< the cipher type is none"]
+    WIFI_CIPHER_TYPE_NONE = 0,
+    #[doc = "< the cipher type is WEP40"]
+    WIFI_CIPHER_TYPE_WEP40 = 1,
+    #[doc = "< the cipher type is WEP104"]
+    WIFI_CIPHER_TYPE_WEP104 = 2,
+    #[doc = "< the cipher type is TKIP"]
+    WIFI_CIPHER_TYPE_TKIP = 3,
+    #[doc = "< the cipher type is CCMP"]
+    WIFI_CIPHER_TYPE_CCMP = 4,
+    #[doc = "< the cipher type is TKIP and CCMP"]
+    WIFI_CIPHER_TYPE_TKIP_CCMP = 5,
+    #[doc = "< the cipher type is AES-CMAC-128"]
+    WIFI_CIPHER_TYPE_AES_CMAC128 = 6,
+    #[doc = "< the cipher type is unknown"]
+    WIFI_CIPHER_TYPE_UNKNOWN = 7,
+}
+#[repr(u32)]
+#[doc = " @brief WiFi antenna"]
+#[doc = ""]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_ant_t {
+    #[doc = "< WiFi antenna 0"]
+    WIFI_ANT_ANT0 = 0,
+    #[doc = "< WiFi antenna 1"]
+    WIFI_ANT_ANT1 = 1,
+    #[doc = "< Invalid WiFi antenna"]
+    WIFI_ANT_MAX = 2,
+}
+#[doc = " @brief Description of a WiFi AP"]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct wifi_ap_record_t {
+    #[doc = "< MAC address of AP"]
+    pub bssid: [u8; 6usize],
+    #[doc = "< SSID of AP"]
+    pub ssid: [u8; 33usize],
+    #[doc = "< channel of AP"]
+    pub primary: u8,
+    #[doc = "< secondary channel of AP"]
+    pub second: wifi_second_chan_t,
+    #[doc = "< signal strength of AP"]
+    pub rssi: i8,
+    #[doc = "< authmode of AP"]
+    pub authmode: wifi_auth_mode_t,
+    #[doc = "< pairwise cipher of AP"]
+    pub pairwise_cipher: wifi_cipher_type_t,
+    #[doc = "< group cipher of AP"]
+    pub group_cipher: wifi_cipher_type_t,
+    #[doc = "< antenna used to receive beacon from AP"]
+    pub ant: wifi_ant_t,
+    pub _bitfield_1: __BindgenBitfieldUnit<[u8; 4usize], u32>,
+    #[doc = "< country information of AP"]
+    pub country: wifi_country_t,
+}
+impl Default for wifi_ap_record_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+impl wifi_ap_record_t {
+    #[inline]
+    pub fn phy_11b(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(0usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_phy_11b(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(0usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn phy_11g(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(1usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_phy_11g(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(1usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn phy_11n(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(2usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_phy_11n(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(2usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn phy_lr(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(3usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_phy_lr(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(3usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn wps(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(4usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_wps(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(4usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn reserved(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(5usize, 27u8) as u32) }
+    }
+    #[inline]
+    pub fn set_reserved(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(5usize, 27u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn new_bitfield_1(
+        phy_11b: u32,
+        phy_11g: u32,
+        phy_11n: u32,
+        phy_lr: u32,
+        wps: u32,
+        reserved: u32,
+    ) -> __BindgenBitfieldUnit<[u8; 4usize], u32> {
+        let mut __bindgen_bitfield_unit: __BindgenBitfieldUnit<[u8; 4usize], u32> =
+            Default::default();
+        __bindgen_bitfield_unit.set(0usize, 1u8, {
+            let phy_11b: u32 = unsafe { ::core::mem::transmute(phy_11b) };
+            phy_11b as u64
+        });
+        __bindgen_bitfield_unit.set(1usize, 1u8, {
+            let phy_11g: u32 = unsafe { ::core::mem::transmute(phy_11g) };
+            phy_11g as u64
+        });
+        __bindgen_bitfield_unit.set(2usize, 1u8, {
+            let phy_11n: u32 = unsafe { ::core::mem::transmute(phy_11n) };
+            phy_11n as u64
+        });
+        __bindgen_bitfield_unit.set(3usize, 1u8, {
+            let phy_lr: u32 = unsafe { ::core::mem::transmute(phy_lr) };
+            phy_lr as u64
+        });
+        __bindgen_bitfield_unit.set(4usize, 1u8, {
+            let wps: u32 = unsafe { ::core::mem::transmute(wps) };
+            wps as u64
+        });
+        __bindgen_bitfield_unit.set(5usize, 27u8, {
+            let reserved: u32 = unsafe { ::core::mem::transmute(reserved) };
+            reserved as u64
+        });
+        __bindgen_bitfield_unit
+    }
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_scan_method_t {
+    #[doc = "< Do fast scan, scan will end after find SSID match AP"]
+    WIFI_FAST_SCAN = 0,
+    #[doc = "< All channel scan, scan will end after scan all the channel"]
+    WIFI_ALL_CHANNEL_SCAN = 1,
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_sort_method_t {
+    #[doc = "< Sort match AP in scan list by RSSI"]
+    WIFI_CONNECT_AP_BY_SIGNAL = 0,
+    #[doc = "< Sort match AP in scan list by security mode"]
+    WIFI_CONNECT_AP_BY_SECURITY = 1,
+}
+#[doc = " @brief Structure describing parameters for a WiFi fast scan"]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct wifi_scan_threshold_t {
+    #[doc = "< The minimum rssi to accept in the fast scan mode"]
+    pub rssi: i8,
+    #[doc = "< The weakest authmode to accept in the fast scan mode"]
+    pub authmode: wifi_auth_mode_t,
+}
+impl Default for wifi_scan_threshold_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_ps_type_t {
+    #[doc = "< No power save"]
+    WIFI_PS_NONE = 0,
+    #[doc = "< Minimum modem power saving. In this mode, station wakes up to receive beacon every DTIM period"]
+    WIFI_PS_MIN_MODEM = 1,
+    #[doc = "< Maximum modem power saving. In this mode, interval to receive beacons is determined by the listen_interval parameter in wifi_sta_config_t"]
+    WIFI_PS_MAX_MODEM = 2,
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_bandwidth_t {
+    WIFI_BW_HT20 = 1,
+    WIFI_BW_HT40 = 2,
+}
+#[doc = " Configuration structure for Protected Management Frame"]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_pmf_config_t {
+    #[doc = "< Advertizes support for Protected Management Frame. Device will prefer to connect in PMF mode if other device also advertizes PMF capability."]
+    pub capable: bool,
+    #[doc = "< Advertizes that Protected Management Frame is required. Device will not associate to non-PMF capable devices."]
+    pub required: bool,
+}
+#[doc = " @brief Soft-AP configuration settings for the ESP32"]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct wifi_ap_config_t {
+    #[doc = "< SSID of ESP32 soft-AP. If ssid_len field is 0, this must be a Null terminated string. Otherwise, length is set according to ssid_len."]
+    pub ssid: [u8; 32usize],
+    #[doc = "< Password of ESP32 soft-AP. Null terminated string."]
+    pub password: [u8; 64usize],
+    #[doc = "< Optional length of SSID field."]
+    pub ssid_len: u8,
+    #[doc = "< Channel of ESP32 soft-AP"]
+    pub channel: u8,
+    #[doc = "< Auth mode of ESP32 soft-AP. Do not support AUTH_WEP in soft-AP mode"]
+    pub authmode: wifi_auth_mode_t,
+    #[doc = "< Broadcast SSID or not, default 0, broadcast the SSID"]
+    pub ssid_hidden: u8,
+    #[doc = "< Max number of stations allowed to connect in, default 4, max 10"]
+    pub max_connection: u8,
+    #[doc = "< Beacon interval, 100 ~ 60000 ms, default 100 ms"]
+    pub beacon_interval: u16,
+}
+impl Default for wifi_ap_config_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+#[doc = " @brief STA configuration settings for the ESP32"]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct wifi_sta_config_t {
+    #[doc = "< SSID of target AP. Null terminated string."]
+    pub ssid: [u8; 32usize],
+    #[doc = "< Password of target AP. Null terminated string."]
+    pub password: [u8; 64usize],
+    #[doc = "< do all channel scan or fast scan"]
+    pub scan_method: wifi_scan_method_t,
+    #[doc = "< whether set MAC address of target AP or not. Generally, station_config.bssid_set needs to be 0; and it needs to be 1 only when users need to check the MAC address of the AP."]
+    pub bssid_set: bool,
+    #[doc = "< MAC address of target AP"]
+    pub bssid: [u8; 6usize],
+    #[doc = "< channel of target AP. Set to 1~13 to scan starting from the specified channel before connecting to AP. If the channel of AP is unknown, set it to 0."]
+    pub channel: u8,
+    #[doc = "< Listen interval for ESP32 station to receive beacon when WIFI_PS_MAX_MODEM is set. Units: AP beacon intervals. Defaults to 3 if set to 0."]
+    pub listen_interval: u16,
+    #[doc = "< sort the connect AP in the list by rssi or security mode"]
+    pub sort_method: wifi_sort_method_t,
+    #[doc = "< When sort_method is set, only APs which have an auth mode that is more secure than the selected auth mode and a signal stronger than the minimum RSSI will be used."]
+    pub threshold: wifi_scan_threshold_t,
+    #[doc = "< Configuration for Protected Management Frame. Will be advertized in RSN Capabilities in RSN IE."]
+    pub pmf_cfg: wifi_pmf_config_t,
+}
+impl Default for wifi_sta_config_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+#[doc = " @brief Configuration data for ESP32 AP or STA."]
+#[doc = ""]
+#[doc = " The usage of this union (for ap or sta configuration) is determined by the accompanying"]
+#[doc = " interface argument passed to esp_wifi_set_config() or esp_wifi_get_config()"]
+#[doc = ""]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union wifi_config_t {
+    #[doc = "< configuration of AP"]
+    pub ap: wifi_ap_config_t,
+    #[doc = "< configuration of STA"]
+    pub sta: wifi_sta_config_t,
+    _bindgen_union_align: [u32; 32usize],
+}
+impl Default for wifi_config_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+#[doc = " @brief Description of STA associated with AP"]
+#[repr(C)]
+#[repr(align(4))]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_sta_info_t {
+    #[doc = "< mac address"]
+    pub mac: [u8; 6usize],
+    #[doc = "< current average rssi of sta connected"]
+    pub rssi: i8,
+    pub _bitfield_1: __BindgenBitfieldUnit<[u8; 4usize], u32>,
+}
+impl wifi_sta_info_t {
+    #[inline]
+    pub fn phy_11b(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(0usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_phy_11b(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(0usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn phy_11g(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(1usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_phy_11g(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(1usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn phy_11n(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(2usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_phy_11n(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(2usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn phy_lr(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(3usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_phy_lr(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(3usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn reserved(&self) -> u32 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(4usize, 28u8) as u32) }
+    }
+    #[inline]
+    pub fn set_reserved(&mut self, val: u32) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(4usize, 28u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn new_bitfield_1(
+        phy_11b: u32,
+        phy_11g: u32,
+        phy_11n: u32,
+        phy_lr: u32,
+        reserved: u32,
+    ) -> __BindgenBitfieldUnit<[u8; 4usize], u32> {
+        let mut __bindgen_bitfield_unit: __BindgenBitfieldUnit<[u8; 4usize], u32> =
+            Default::default();
+        __bindgen_bitfield_unit.set(0usize, 1u8, {
+            let phy_11b: u32 = unsafe { ::core::mem::transmute(phy_11b) };
+            phy_11b as u64
+        });
+        __bindgen_bitfield_unit.set(1usize, 1u8, {
+            let phy_11g: u32 = unsafe { ::core::mem::transmute(phy_11g) };
+            phy_11g as u64
+        });
+        __bindgen_bitfield_unit.set(2usize, 1u8, {
+            let phy_11n: u32 = unsafe { ::core::mem::transmute(phy_11n) };
+            phy_11n as u64
+        });
+        __bindgen_bitfield_unit.set(3usize, 1u8, {
+            let phy_lr: u32 = unsafe { ::core::mem::transmute(phy_lr) };
+            phy_lr as u64
+        });
+        __bindgen_bitfield_unit.set(4usize, 28u8, {
+            let reserved: u32 = unsafe { ::core::mem::transmute(reserved) };
+            reserved as u64
+        });
+        __bindgen_bitfield_unit
+    }
+}
+#[doc = " @brief List of stations associated with the ESP32 Soft-AP"]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_sta_list_t {
+    #[doc = "< station list"]
+    pub sta: [wifi_sta_info_t; 10usize],
+    #[doc = "< number of stations in the list (other entries are invalid)"]
+    pub num: cty::c_int,
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_storage_t {
+    #[doc = "< all configuration will store in both memory and flash"]
+    WIFI_STORAGE_FLASH = 0,
+    #[doc = "< all configuration will only store in the memory"]
+    WIFI_STORAGE_RAM = 1,
+}
+#[repr(u32)]
+#[doc = " @brief     Vendor Information Element type"]
+#[doc = ""]
+#[doc = " Determines the frame type that the IE will be associated with."]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_vendor_ie_type_t {
+    WIFI_VND_IE_TYPE_BEACON = 0,
+    WIFI_VND_IE_TYPE_PROBE_REQ = 1,
+    WIFI_VND_IE_TYPE_PROBE_RESP = 2,
+    WIFI_VND_IE_TYPE_ASSOC_REQ = 3,
+    WIFI_VND_IE_TYPE_ASSOC_RESP = 4,
+}
+#[repr(u32)]
+#[doc = " @brief     Vendor Information Element index"]
+#[doc = ""]
+#[doc = " Each IE type can have up to two associated vendor ID elements."]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_vendor_ie_id_t {
+    WIFI_VND_IE_ID_0 = 0,
+    WIFI_VND_IE_ID_1 = 1,
+}
+#[doc = " @brief Vendor Information Element header"]
+#[doc = ""]
+#[doc = " The first bytes of the Information Element will match this header. Payload follows."]
+#[repr(C)]
+#[derive(Debug, Default)]
+pub struct vendor_ie_data_t {
+    #[doc = "< Should be set to WIFI_VENDOR_IE_ELEMENT_ID (0xDD)"]
+    pub element_id: u8,
+    #[doc = "< Length of all bytes in the element data following this field. Minimum 4."]
+    pub length: u8,
+    #[doc = "< Vendor identifier (OUI)."]
+    pub vendor_oui: [u8; 3usize],
+    #[doc = "< Vendor-specific OUI type."]
+    pub vendor_oui_type: u8,
+    #[doc = "< Payload. Length is equal to value in 'length' field, minus 4."]
+    pub payload: __IncompleteArrayField<u8>,
+}
+#[doc = " @brief Received packet radio metadata header, this is the common header at the beginning of all promiscuous mode RX callback buffers"]
+#[repr(C)]
+#[repr(align(4))]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_pkt_rx_ctrl_t {
+    pub _bitfield_1: __BindgenBitfieldUnit<[u8; 28usize], u32>,
+}
+impl wifi_pkt_rx_ctrl_t {
+    #[inline]
+    pub fn rssi(&self) -> cty::c_int {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(0usize, 8u8) as u32) }
+    }
+    #[inline]
+    pub fn set_rssi(&mut self, val: cty::c_int) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(0usize, 8u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn rate(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(8usize, 5u8) as u32) }
+    }
+    #[inline]
+    pub fn set_rate(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(8usize, 5u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn sig_mode(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(14usize, 2u8) as u32) }
+    }
+    #[inline]
+    pub fn set_sig_mode(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(14usize, 2u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn mcs(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(32usize, 7u8) as u32) }
+    }
+    #[inline]
+    pub fn set_mcs(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(32usize, 7u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn cwb(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(39usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_cwb(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(39usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn smoothing(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(56usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_smoothing(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(56usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn not_sounding(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(57usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_not_sounding(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(57usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn aggregation(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(59usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_aggregation(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(59usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn stbc(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(60usize, 2u8) as u32) }
+    }
+    #[inline]
+    pub fn set_stbc(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(60usize, 2u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn fec_coding(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(62usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_fec_coding(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(62usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn sgi(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(63usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_sgi(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(63usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn noise_floor(&self) -> cty::c_int {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(64usize, 8u8) as u32) }
+    }
+    #[inline]
+    pub fn set_noise_floor(&mut self, val: cty::c_int) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(64usize, 8u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn ampdu_cnt(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(72usize, 8u8) as u32) }
+    }
+    #[inline]
+    pub fn set_ampdu_cnt(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(72usize, 8u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn channel(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(80usize, 4u8) as u32) }
+    }
+    #[inline]
+    pub fn set_channel(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(80usize, 4u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn secondary_channel(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(84usize, 4u8) as u32) }
+    }
+    #[inline]
+    pub fn set_secondary_channel(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(84usize, 4u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn timestamp(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(96usize, 32u8) as u32) }
+    }
+    #[inline]
+    pub fn set_timestamp(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(96usize, 32u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn ant(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(191usize, 1u8) as u32) }
+    }
+    #[inline]
+    pub fn set_ant(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(191usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn sig_len(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(192usize, 12u8) as u32) }
+    }
+    #[inline]
+    pub fn set_sig_len(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(192usize, 12u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn rx_state(&self) -> cty::c_uint {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(216usize, 8u8) as u32) }
+    }
+    #[inline]
+    pub fn set_rx_state(&mut self, val: cty::c_uint) {
+        unsafe {
+            let val: u32 = ::core::mem::transmute(val);
+            self._bitfield_1.set(216usize, 8u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn new_bitfield_1(
+        rssi: cty::c_int,
+        rate: cty::c_uint,
+        sig_mode: cty::c_uint,
+        mcs: cty::c_uint,
+        cwb: cty::c_uint,
+        smoothing: cty::c_uint,
+        not_sounding: cty::c_uint,
+        aggregation: cty::c_uint,
+        stbc: cty::c_uint,
+        fec_coding: cty::c_uint,
+        sgi: cty::c_uint,
+        noise_floor: cty::c_int,
+        ampdu_cnt: cty::c_uint,
+        channel: cty::c_uint,
+        secondary_channel: cty::c_uint,
+        timestamp: cty::c_uint,
+        ant: cty::c_uint,
+        sig_len: cty::c_uint,
+        rx_state: cty::c_uint,
+    ) -> __BindgenBitfieldUnit<[u8; 28usize], u32> {
+        let mut __bindgen_bitfield_unit: __BindgenBitfieldUnit<[u8; 28usize], u32> =
+            Default::default();
+        __bindgen_bitfield_unit.set(0usize, 8u8, {
+            let rssi: u32 = unsafe { ::core::mem::transmute(rssi) };
+            rssi as u64
+        });
+        __bindgen_bitfield_unit.set(8usize, 5u8, {
+            let rate: u32 = unsafe { ::core::mem::transmute(rate) };
+            rate as u64
+        });
+        __bindgen_bitfield_unit.set(14usize, 2u8, {
+            let sig_mode: u32 = unsafe { ::core::mem::transmute(sig_mode) };
+            sig_mode as u64
+        });
+        __bindgen_bitfield_unit.set(32usize, 7u8, {
+            let mcs: u32 = unsafe { ::core::mem::transmute(mcs) };
+            mcs as u64
+        });
+        __bindgen_bitfield_unit.set(39usize, 1u8, {
+            let cwb: u32 = unsafe { ::core::mem::transmute(cwb) };
+            cwb as u64
+        });
+        __bindgen_bitfield_unit.set(56usize, 1u8, {
+            let smoothing: u32 = unsafe { ::core::mem::transmute(smoothing) };
+            smoothing as u64
+        });
+        __bindgen_bitfield_unit.set(57usize, 1u8, {
+            let not_sounding: u32 = unsafe { ::core::mem::transmute(not_sounding) };
+            not_sounding as u64
+        });
+        __bindgen_bitfield_unit.set(59usize, 1u8, {
+            let aggregation: u32 = unsafe { ::core::mem::transmute(aggregation) };
+            aggregation as u64
+        });
+        __bindgen_bitfield_unit.set(60usize, 2u8, {
+            let stbc: u32 = unsafe { ::core::mem::transmute(stbc) };
+            stbc as u64
+        });
+        __bindgen_bitfield_unit.set(62usize, 1u8, {
+            let fec_coding: u32 = unsafe { ::core::mem::transmute(fec_coding) };
+            fec_coding as u64
+        });
+        __bindgen_bitfield_unit.set(63usize, 1u8, {
+            let sgi: u32 = unsafe { ::core::mem::transmute(sgi) };
+            sgi as u64
+        });
+        __bindgen_bitfield_unit.set(64usize, 8u8, {
+            let noise_floor: u32 = unsafe { ::core::mem::transmute(noise_floor) };
+            noise_floor as u64
+        });
+        __bindgen_bitfield_unit.set(72usize, 8u8, {
+            let ampdu_cnt: u32 = unsafe { ::core::mem::transmute(ampdu_cnt) };
+            ampdu_cnt as u64
+        });
+        __bindgen_bitfield_unit.set(80usize, 4u8, {
+            let channel: u32 = unsafe { ::core::mem::transmute(channel) };
+            channel as u64
+        });
+        __bindgen_bitfield_unit.set(84usize, 4u8, {
+            let secondary_channel: u32 = unsafe { ::core::mem::transmute(secondary_channel) };
+            secondary_channel as u64
+        });
+        __bindgen_bitfield_unit.set(96usize, 32u8, {
+            let timestamp: u32 = unsafe { ::core::mem::transmute(timestamp) };
+            timestamp as u64
+        });
+        __bindgen_bitfield_unit.set(191usize, 1u8, {
+            let ant: u32 = unsafe { ::core::mem::transmute(ant) };
+            ant as u64
+        });
+        __bindgen_bitfield_unit.set(192usize, 12u8, {
+            let sig_len: u32 = unsafe { ::core::mem::transmute(sig_len) };
+            sig_len as u64
+        });
+        __bindgen_bitfield_unit.set(216usize, 8u8, {
+            let rx_state: u32 = unsafe { ::core::mem::transmute(rx_state) };
+            rx_state as u64
+        });
+        __bindgen_bitfield_unit
+    }
+}
+#[repr(u32)]
+#[doc = " @brief Promiscuous frame type"]
+#[doc = ""]
+#[doc = " Passed to promiscuous mode RX callback to indicate the type of parameter in the buffer."]
+#[doc = ""]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_promiscuous_pkt_type_t {
+    #[doc = "< Management frame, indicates 'buf' argument is wifi_promiscuous_pkt_t"]
+    WIFI_PKT_MGMT = 0,
+    #[doc = "< Control frame, indicates 'buf' argument is wifi_promiscuous_pkt_t"]
+    WIFI_PKT_CTRL = 1,
+    #[doc = "< Data frame, indiciates 'buf' argument is wifi_promiscuous_pkt_t"]
+    WIFI_PKT_DATA = 2,
+    #[doc = "< Other type, such as MIMO etc. 'buf' argument is wifi_promiscuous_pkt_t but the payload is zero length."]
+    WIFI_PKT_MISC = 3,
+}
+#[doc = " @brief Mask for filtering different packet types in promiscuous mode."]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_promiscuous_filter_t {
+    #[doc = "< OR of one or more filter values WIFI_PROMIS_FILTER_*"]
+    pub filter_mask: u32,
+}
+#[doc = " @brief Channel state information(CSI) configuration type"]
+#[doc = ""]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_csi_config_t {
+    #[doc = "< enable to receive legacy long training field(lltf) data. Default enabled"]
+    pub lltf_en: bool,
+    #[doc = "< enable to receive HT long training field(htltf) data. Default enabled"]
+    pub htltf_en: bool,
+    #[doc = "< enable to receive space time block code HT long training field(stbc-htltf2) data. Default enabled"]
+    pub stbc_htltf2_en: bool,
+    #[doc = "< enable to generate htlft data by averaging lltf and ht_ltf data when receiving HT packet. Otherwise, use ht_ltf data directly. Default enabled"]
+    pub ltf_merge_en: bool,
+    #[doc = "< enable to turn on channel filter to smooth adjacent sub-carrier. Disable it to keep independence of adjacent sub-carrier. Default enabled"]
+    pub channel_filter_en: bool,
+    #[doc = "< manually scale the CSI data by left shifting or automatically scale the CSI data. If set true, please set the shift bits. false: automatically. true: manually. Default false"]
+    pub manu_scale: bool,
+    #[doc = "< manually left shift bits of the scale of the CSI data. The range of the left shift bits is 0~15"]
+    pub shift: u8,
+}
+#[doc = " @brief CSI data type"]
+#[doc = ""]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct wifi_csi_info_t {
+    #[doc = "< received packet radio metadata header of the CSI data"]
+    pub rx_ctrl: wifi_pkt_rx_ctrl_t,
+    #[doc = "< source MAC address of the CSI data"]
+    pub mac: [u8; 6usize],
+    #[doc = "< first four bytes of the CSI data is invalid or not"]
+    pub first_word_invalid: bool,
+    #[doc = "< buffer of CSI data"]
+    pub buf: *mut i8,
+    #[doc = "< length of CSI data"]
+    pub len: u16,
+}
+impl Default for wifi_csi_info_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+#[doc = " @brief WiFi GPIO configuration for antenna selection"]
+#[doc = ""]
+#[repr(C, packed)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_ant_gpio_t {
+    pub _bitfield_1: __BindgenBitfieldUnit<[u8; 1usize], u8>,
+}
+impl wifi_ant_gpio_t {
+    #[inline]
+    pub fn gpio_select(&self) -> u8 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(0usize, 1u8) as u8) }
+    }
+    #[inline]
+    pub fn set_gpio_select(&mut self, val: u8) {
+        unsafe {
+            let val: u8 = ::core::mem::transmute(val);
+            self._bitfield_1.set(0usize, 1u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn gpio_num(&self) -> u8 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(1usize, 7u8) as u8) }
+    }
+    #[inline]
+    pub fn set_gpio_num(&mut self, val: u8) {
+        unsafe {
+            let val: u8 = ::core::mem::transmute(val);
+            self._bitfield_1.set(1usize, 7u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn new_bitfield_1(
+        gpio_select: u8,
+        gpio_num: u8,
+    ) -> __BindgenBitfieldUnit<[u8; 1usize], u8> {
+        let mut __bindgen_bitfield_unit: __BindgenBitfieldUnit<[u8; 1usize], u8> =
+            Default::default();
+        __bindgen_bitfield_unit.set(0usize, 1u8, {
+            let gpio_select: u8 = unsafe { ::core::mem::transmute(gpio_select) };
+            gpio_select as u64
+        });
+        __bindgen_bitfield_unit.set(1usize, 7u8, {
+            let gpio_num: u8 = unsafe { ::core::mem::transmute(gpio_num) };
+            gpio_num as u64
+        });
+        __bindgen_bitfield_unit
+    }
+}
+#[doc = " @brief WiFi GPIOs configuration for antenna selection"]
+#[doc = ""]
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct wifi_ant_gpio_config_t {
+    #[doc = "< The configurations of GPIOs that connect to external antenna switch"]
+    pub gpio_cfg: [wifi_ant_gpio_t; 4usize],
+}
+#[repr(u32)]
+#[doc = " @brief WiFi antenna mode"]
+#[doc = ""]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum wifi_ant_mode_t {
+    #[doc = "< Enable WiFi antenna 0 only"]
+    WIFI_ANT_MODE_ANT0 = 0,
+    #[doc = "< Enable WiFi antenna 1 only"]
+    WIFI_ANT_MODE_ANT1 = 1,
+    #[doc = "< Enable WiFi antenna 0 and 1, automatically select an antenna"]
+    WIFI_ANT_MODE_AUTO = 2,
+    #[doc = "< Invalid WiFi enabled antenna"]
+    WIFI_ANT_MODE_MAX = 3,
+}
+#[doc = " @brief WiFi antenna configuration"]
+#[doc = ""]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct wifi_ant_config_t {
+    #[doc = "< WiFi antenna mode for receiving"]
+    pub rx_ant_mode: wifi_ant_mode_t,
+    #[doc = "< Default antenna mode for receiving, it's ignored if rx_ant_mode is not WIFI_ANT_MODE_AUTO"]
+    pub rx_ant_default: wifi_ant_t,
+    #[doc = "< WiFi antenna mode for transmission, it can be set to WIFI_ANT_MODE_AUTO only if rx_ant_mode is set to WIFI_ANT_MODE_AUTO"]
+    pub tx_ant_mode: wifi_ant_mode_t,
+    pub _bitfield_1: __BindgenBitfieldUnit<[u8; 1usize], u8>,
+    pub __bindgen_padding_0: [u8; 3usize],
+}
+impl Default for wifi_ant_config_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+impl wifi_ant_config_t {
+    #[inline]
+    pub fn enabled_ant0(&self) -> u8 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(0usize, 4u8) as u8) }
+    }
+    #[inline]
+    pub fn set_enabled_ant0(&mut self, val: u8) {
+        unsafe {
+            let val: u8 = ::core::mem::transmute(val);
+            self._bitfield_1.set(0usize, 4u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn enabled_ant1(&self) -> u8 {
+        unsafe { ::core::mem::transmute(self._bitfield_1.get(4usize, 4u8) as u8) }
+    }
+    #[inline]
+    pub fn set_enabled_ant1(&mut self, val: u8) {
+        unsafe {
+            let val: u8 = ::core::mem::transmute(val);
+            self._bitfield_1.set(4usize, 4u8, val as u64)
+        }
+    }
+    #[inline]
+    pub fn new_bitfield_1(
+        enabled_ant0: u8,
+        enabled_ant1: u8,
+    ) -> __BindgenBitfieldUnit<[u8; 1usize], u8> {
+        let mut __bindgen_bitfield_unit: __BindgenBitfieldUnit<[u8; 1usize], u8> =
+            Default::default();
+        __bindgen_bitfield_unit.set(0usize, 4u8, {
+            let enabled_ant0: u8 = unsafe { ::core::mem::transmute(enabled_ant0) };
+            enabled_ant0 as u64
+        });
+        __bindgen_bitfield_unit.set(4usize, 4u8, {
+            let enabled_ant1: u8 = unsafe { ::core::mem::transmute(enabled_ant1) };
+            enabled_ant1 as u64
+        });
+        __bindgen_bitfield_unit
+    }
+}
 #[repr(u32)]
 #[doc = " @brief WiFi PHY rate encodings"]
 #[doc = ""]
@@ -457,7 +1655,7 @@ pub type esp_ccmp_encrypt_t = ::core::option::Option<
 #[doc = "        The structure can be set as software crypto or the crypto optimized by ESP32"]
 #[doc = "        hardware."]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct wpa_crypto_funcs_t {
     pub size: u32,
     pub version: u32,
@@ -489,7 +1687,7 @@ pub struct wpa_crypto_funcs_t {
     pub ccmp_encrypt: esp_ccmp_encrypt_t,
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct wifi_osi_funcs_t {
     pub _version: i32,
     pub _set_isr: ::core::option::Option<
@@ -771,10 +1969,771 @@ pub struct wifi_init_config_t {
     #[doc = "< WiFi init magic number, it should be the last field"]
     pub magic: cty::c_int,
 }
+impl Default for wifi_init_config_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+extern "C" {
+    #[doc = " @brief     Set the WiFi operating mode"]
+    #[doc = ""]
+    #[doc = "            Set the WiFi operating mode as station, soft-AP or station+soft-AP,"]
+    #[doc = "            The default mode is soft-AP mode."]
+    #[doc = ""]
+    #[doc = " @param     mode  WiFi operating mode"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - others: refer to error code in esp_err.h"]
+    pub fn esp_wifi_set_mode(mode: wifi_mode_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief  Get current operating mode of WiFi"]
+    #[doc = ""]
+    #[doc = " @param[out]  mode  store current WiFi mode"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_get_mode(mode: *mut wifi_mode_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief  Start WiFi according to current configuration"]
+    #[doc = "         If mode is WIFI_MODE_STA, it create station control block and start station"]
+    #[doc = "         If mode is WIFI_MODE_AP, it create soft-AP control block and start soft-AP"]
+    #[doc = "         If mode is WIFI_MODE_APSTA, it create soft-AP and station control block and start soft-AP and station"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - ESP_ERR_NO_MEM: out of memory"]
+    #[doc = "    - ESP_ERR_WIFI_CONN: WiFi internal error, station or soft-AP control block wrong"]
+    #[doc = "    - ESP_FAIL: other WiFi internal errors"]
+    pub fn esp_wifi_start() -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief  Stop WiFi"]
+    #[doc = "         If mode is WIFI_MODE_STA, it stop station and free station control block"]
+    #[doc = "         If mode is WIFI_MODE_AP, it stop soft-AP and free soft-AP control block"]
+    #[doc = "         If mode is WIFI_MODE_APSTA, it stop station/soft-AP and free station/soft-AP control block"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    pub fn esp_wifi_stop() -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief  Restore WiFi stack persistent settings to default values"]
+    #[doc = ""]
+    #[doc = " This function will reset settings made using the following APIs:"]
+    #[doc = " - esp_wifi_get_auto_connect,"]
+    #[doc = " - esp_wifi_set_protocol,"]
+    #[doc = " - esp_wifi_set_config related"]
+    #[doc = " - esp_wifi_set_mode"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    pub fn esp_wifi_restore() -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Connect the ESP32 WiFi station to the AP."]
+    #[doc = ""]
+    #[doc = " @attention 1. This API only impact WIFI_MODE_STA or WIFI_MODE_APSTA mode"]
+    #[doc = " @attention 2. If the ESP32 is connected to an AP, call esp_wifi_disconnect to disconnect."]
+    #[doc = " @attention 3. The scanning triggered by esp_wifi_start_scan() will not be effective until connection between ESP32 and the AP is established."]
+    #[doc = "               If ESP32 is scanning and connecting at the same time, ESP32 will abort scanning and return a warning message and error"]
+    #[doc = "               number ESP_ERR_WIFI_STATE."]
+    #[doc = "               If you want to do reconnection after ESP32 received disconnect event, remember to add the maximum retry time, otherwise the called"]
+    #[doc = "               scan will not work. This is especially true when the AP doesn't exist, and you still try reconnection after ESP32 received disconnect"]
+    #[doc = "               event with the reason code WIFI_REASON_NO_AP_FOUND."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_STARTED: WiFi is not started by esp_wifi_start"]
+    #[doc = "    - ESP_ERR_WIFI_CONN: WiFi internal error, station or soft-AP control block wrong"]
+    #[doc = "    - ESP_ERR_WIFI_SSID: SSID of AP which station connects is invalid"]
+    pub fn esp_wifi_connect() -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Disconnect the ESP32 WiFi station from the AP."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi was not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_STARTED: WiFi was not started by esp_wifi_start"]
+    #[doc = "    - ESP_FAIL: other WiFi internal errors"]
+    pub fn esp_wifi_disconnect() -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Currently this API is just an stub API"]
+    #[doc = ""]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - others: fail"]
+    pub fn esp_wifi_clear_fast_connect() -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     deauthenticate all stations or associated id equals to aid"]
+    #[doc = ""]
+    #[doc = " @param     aid  when aid is 0, deauthenticate all stations, otherwise deauthenticate station whose associated id is aid"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_STARTED: WiFi was not started by esp_wifi_start"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - ESP_ERR_WIFI_MODE: WiFi mode is wrong"]
+    pub fn esp_wifi_deauth_sta(aid: u16) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Scan all available APs."]
+    #[doc = ""]
+    #[doc = " @attention If this API is called, the found APs are stored in WiFi driver dynamic allocated memory and the"]
+    #[doc = "            will be freed in esp_wifi_scan_get_ap_records, so generally, call esp_wifi_scan_get_ap_records to cause"]
+    #[doc = "            the memory to be freed once the scan is done"]
+    #[doc = " @attention The values of maximum active scan time and passive scan time per channel are limited to 1500 milliseconds."]
+    #[doc = "            Values above 1500ms may cause station to disconnect from AP and are not recommended."]
+    #[doc = ""]
+    #[doc = " @param     config  configuration of scanning"]
+    #[doc = " @param     block if block is true, this API will block the caller until the scan is done, otherwise"]
+    #[doc = "                         it will return immediately"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_STARTED: WiFi was not started by esp_wifi_start"]
+    #[doc = "    - ESP_ERR_WIFI_TIMEOUT: blocking scan is timeout"]
+    #[doc = "    - ESP_ERR_WIFI_STATE: wifi still connecting when invoke esp_wifi_scan_start"]
+    #[doc = "    - others: refer to error code in esp_err.h"]
+    pub fn esp_wifi_scan_start(config: *const wifi_scan_config_t, block: bool) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Stop the scan in process"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_STARTED: WiFi is not started by esp_wifi_start"]
+    pub fn esp_wifi_scan_stop() -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get number of APs found in last scan"]
+    #[doc = ""]
+    #[doc = " @param[out] number  store number of APIs found in last scan"]
+    #[doc = ""]
+    #[doc = " @attention This API can only be called when the scan is completed, otherwise it may get wrong value."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_STARTED: WiFi is not started by esp_wifi_start"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_scan_get_ap_num(number: *mut u16) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get AP list found in last scan"]
+    #[doc = ""]
+    #[doc = " @param[inout]  number As input param, it stores max AP number ap_records can hold."]
+    #[doc = "                As output param, it receives the actual AP number this API returns."]
+    #[doc = " @param         ap_records  wifi_ap_record_t array to hold the found APs"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_STARTED: WiFi is not started by esp_wifi_start"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - ESP_ERR_NO_MEM: out of memory"]
+    pub fn esp_wifi_scan_get_ap_records(
+        number: *mut u16,
+        ap_records: *mut wifi_ap_record_t,
+    ) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get information of AP which the ESP32 station is associated with"]
+    #[doc = ""]
+    #[doc = " @param     ap_info  the wifi_ap_record_t to hold AP information"]
+    #[doc = "            sta can get the connected ap's phy mode info through the struct member"]
+    #[doc = "            phy_11b，phy_11g，phy_11n，phy_lr in the wifi_ap_record_t struct."]
+    #[doc = "            For example, phy_11b = 1 imply that ap support 802.11b mode"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_CONN: The station interface don't initialized"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_CONNECT: The station is in disconnect status"]
+    pub fn esp_wifi_sta_get_ap_info(ap_info: *mut wifi_ap_record_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set current WiFi power save type"]
+    #[doc = ""]
+    #[doc = " @attention Default power save type is WIFI_PS_MIN_MODEM."]
+    #[doc = ""]
+    #[doc = " @param     type  power save type"]
+    #[doc = ""]
+    #[doc = " @return    ESP_OK: succeed"]
+    pub fn esp_wifi_set_ps(type_: wifi_ps_type_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get current WiFi power save type"]
+    #[doc = ""]
+    #[doc = " @attention Default power save type is WIFI_PS_MIN_MODEM."]
+    #[doc = ""]
+    #[doc = " @param[out]  type: store current power save type"]
+    #[doc = ""]
+    #[doc = " @return    ESP_OK: succeed"]
+    pub fn esp_wifi_get_ps(type_: *mut wifi_ps_type_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set protocol type of specified interface"]
+    #[doc = "            The default protocol is (WIFI_PROTOCOL_11B|WIFI_PROTOCOL_11G|WIFI_PROTOCOL_11N)"]
+    #[doc = ""]
+    #[doc = " @attention Currently we only support 802.11b or 802.11bg or 802.11bgn mode"]
+    #[doc = ""]
+    #[doc = " @param     ifx  interfaces"]
+    #[doc = " @param     protocol_bitmap  WiFi protocol bitmap"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_IF: invalid interface"]
+    #[doc = "    - others: refer to error codes in esp_err.h"]
+    pub fn esp_wifi_set_protocol(ifx: wifi_interface_t, protocol_bitmap: u8) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get the current protocol bitmap of the specified interface"]
+    #[doc = ""]
+    #[doc = " @param     ifx  interface"]
+    #[doc = " @param[out] protocol_bitmap  store current WiFi protocol bitmap of interface ifx"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_IF: invalid interface"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - others: refer to error codes in esp_err.h"]
+    pub fn esp_wifi_get_protocol(ifx: wifi_interface_t, protocol_bitmap: *mut u8) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set the bandwidth of ESP32 specified interface"]
+    #[doc = ""]
+    #[doc = " @attention 1. API return false if try to configure an interface that is not enabled"]
+    #[doc = " @attention 2. WIFI_BW_HT40 is supported only when the interface support 11N"]
+    #[doc = ""]
+    #[doc = " @param     ifx  interface to be configured"]
+    #[doc = " @param     bw  bandwidth"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_IF: invalid interface"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - others: refer to error codes in esp_err.h"]
+    pub fn esp_wifi_set_bandwidth(ifx: wifi_interface_t, bw: wifi_bandwidth_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get the bandwidth of ESP32 specified interface"]
+    #[doc = ""]
+    #[doc = " @attention 1. API return false if try to get a interface that is not enable"]
+    #[doc = ""]
+    #[doc = " @param     ifx interface to be configured"]
+    #[doc = " @param[out] bw  store bandwidth of interface ifx"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_IF: invalid interface"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_get_bandwidth(ifx: wifi_interface_t, bw: *mut wifi_bandwidth_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set primary/secondary channel of ESP32"]
+    #[doc = ""]
+    #[doc = " @attention 1. This API should be called after esp_wifi_start()"]
+    #[doc = " @attention 2. When ESP32 is in STA mode, this API should not be called when STA is scanning or connecting to an external AP"]
+    #[doc = " @attention 3. When ESP32 is in softAP mode, this API should not be called when softAP has connected to external STAs"]
+    #[doc = " @attention 4. When ESP32 is in STA+softAP mode, this API should not be called when in the scenarios described above"]
+    #[doc = ""]
+    #[doc = " @param     primary  for HT20, primary is the channel number, for HT40, primary is the primary channel"]
+    #[doc = " @param     second   for HT20, second is ignored, for HT40, second is the second channel"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_IF: invalid interface"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_set_channel(primary: u8, second: wifi_second_chan_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get the primary/secondary channel of ESP32"]
+    #[doc = ""]
+    #[doc = " @attention 1. API return false if try to get a interface that is not enable"]
+    #[doc = ""]
+    #[doc = " @param     primary   store current primary channel"]
+    #[doc = " @param[out]  second  store current second channel"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_get_channel(primary: *mut u8, second: *mut wifi_second_chan_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     configure country info"]
+    #[doc = ""]
+    #[doc = " @attention 1. The default country is {.cc=\"CN\", .schan=1, .nchan=13, policy=WIFI_COUNTRY_POLICY_AUTO}"]
+    #[doc = " @attention 2. When the country policy is WIFI_COUNTRY_POLICY_AUTO, the country info of the AP to which"]
+    #[doc = "               the station is connected is used. E.g. if the configured country info is {.cc=\"USA\", .schan=1, .nchan=11}"]
+    #[doc = "               and the country info of the AP to which the station is connected is {.cc=\"JP\", .schan=1, .nchan=14}"]
+    #[doc = "               then the country info that will be used is {.cc=\"JP\", .schan=1, .nchan=14}. If the station disconnected"]
+    #[doc = "               from the AP the country info is set back back to the country info of the station automatically,"]
+    #[doc = "               {.cc=\"US\", .schan=1, .nchan=11} in the example."]
+    #[doc = " @attention 3. When the country policy is WIFI_COUNTRY_POLICY_MANUAL, always use the configured country info."]
+    #[doc = " @attention 4. When the country info is changed because of configuration or because the station connects to a different"]
+    #[doc = "               external AP, the country IE in probe response/beacon of the soft-AP is changed also."]
+    #[doc = " @attention 5. The country configuration is not stored into flash"]
+    #[doc = " @attention 6. This API doesn't validate the per-country rules, it's up to the user to fill in all fields according to"]
+    #[doc = "               local regulations."]
+    #[doc = ""]
+    #[doc = " @param     country   the configured country info"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_set_country(country: *const wifi_country_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     get the current country info"]
+    #[doc = ""]
+    #[doc = " @param     country  country info"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_get_country(country: *mut wifi_country_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set MAC address of the ESP32 WiFi station or the soft-AP interface."]
+    #[doc = ""]
+    #[doc = " @attention 1. This API can only be called when the interface is disabled"]
+    #[doc = " @attention 2. ESP32 soft-AP and station have different MAC addresses, do not set them to be the same."]
+    #[doc = " @attention 3. The bit 0 of the first byte of ESP32 MAC address can not be 1. For example, the MAC address"]
+    #[doc = "      can set to be \"1a:XX:XX:XX:XX:XX\", but can not be \"15:XX:XX:XX:XX:XX\"."]
+    #[doc = ""]
+    #[doc = " @param     ifx  interface"]
+    #[doc = " @param     mac  the MAC address"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - ESP_ERR_WIFI_IF: invalid interface"]
+    #[doc = "    - ESP_ERR_WIFI_MAC: invalid mac address"]
+    #[doc = "    - ESP_ERR_WIFI_MODE: WiFi mode is wrong"]
+    #[doc = "    - others: refer to error codes in esp_err.h"]
+    pub fn esp_wifi_set_mac(ifx: wifi_interface_t, mac: *const u8) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get mac of specified interface"]
+    #[doc = ""]
+    #[doc = " @param      ifx  interface"]
+    #[doc = " @param[out] mac  store mac of the interface ifx"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - ESP_ERR_WIFI_IF: invalid interface"]
+    pub fn esp_wifi_get_mac(ifx: wifi_interface_t, mac: *mut u8) -> esp_err_t;
+}
+#[doc = " @brief The RX callback function in the promiscuous mode."]
+#[doc = "        Each time a packet is received, the callback function will be called."]
+#[doc = ""]
+#[doc = " @param buf  Data received. Type of data in buffer (wifi_promiscuous_pkt_t or wifi_pkt_rx_ctrl_t) indicated by 'type' parameter."]
+#[doc = " @param type  promiscuous packet type."]
+#[doc = ""]
+pub type wifi_promiscuous_cb_t = ::core::option::Option<
+    unsafe extern "C" fn(buf: *mut cty::c_void, type_: wifi_promiscuous_pkt_type_t),
+>;
+extern "C" {
+    #[doc = " @brief Register the RX callback function in the promiscuous mode."]
+    #[doc = ""]
+    #[doc = " Each time a packet is received, the registered callback function will be called."]
+    #[doc = ""]
+    #[doc = " @param cb  callback"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    pub fn esp_wifi_set_promiscuous_rx_cb(cb: wifi_promiscuous_cb_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Enable the promiscuous mode."]
+    #[doc = ""]
+    #[doc = " @param     en  false - disable, true - enable"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    pub fn esp_wifi_set_promiscuous(en: bool) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get the promiscuous mode."]
+    #[doc = ""]
+    #[doc = " @param[out] en  store the current status of promiscuous mode"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_get_promiscuous(en: *mut bool) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief Enable the promiscuous mode packet type filter."]
+    #[doc = ""]
+    #[doc = " @note The default filter is to filter all packets except WIFI_PKT_MISC"]
+    #[doc = ""]
+    #[doc = " @param filter the packet type filtered in promiscuous mode."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    pub fn esp_wifi_set_promiscuous_filter(filter: *const wifi_promiscuous_filter_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get the promiscuous filter."]
+    #[doc = ""]
+    #[doc = " @param[out] filter  store the current status of promiscuous filter"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_get_promiscuous_filter(filter: *mut wifi_promiscuous_filter_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief Enable subtype filter of the control packet in promiscuous mode."]
+    #[doc = ""]
+    #[doc = " @note The default filter is to filter none control packet."]
+    #[doc = ""]
+    #[doc = " @param filter the subtype of the control packet filtered in promiscuous mode."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    pub fn esp_wifi_set_promiscuous_ctrl_filter(
+        filter: *const wifi_promiscuous_filter_t,
+    ) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get the subtype filter of the control packet in promiscuous mode."]
+    #[doc = ""]
+    #[doc = " @param[out] filter  store the current status of subtype filter of the control packet in promiscuous mode"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_ARG: invalid argument"]
+    pub fn esp_wifi_get_promiscuous_ctrl_filter(
+        filter: *mut wifi_promiscuous_filter_t,
+    ) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set the configuration of the ESP32 STA or AP"]
+    #[doc = ""]
+    #[doc = " @attention 1. This API can be called only when specified interface is enabled, otherwise, API fail"]
+    #[doc = " @attention 2. For station configuration, bssid_set needs to be 0; and it needs to be 1 only when users need to check the MAC address of the AP."]
+    #[doc = " @attention 3. ESP32 is limited to only one channel, so when in the soft-AP+station mode, the soft-AP will adjust its channel automatically to be the same as"]
+    #[doc = "               the channel of the ESP32 station."]
+    #[doc = ""]
+    #[doc = " @param     interface  interface"]
+    #[doc = " @param     conf  station or soft-AP configuration"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - ESP_ERR_WIFI_IF: invalid interface"]
+    #[doc = "    - ESP_ERR_WIFI_MODE: invalid mode"]
+    #[doc = "    - ESP_ERR_WIFI_PASSWORD: invalid password"]
+    #[doc = "    - ESP_ERR_WIFI_NVS: WiFi internal NVS error"]
+    #[doc = "    - others: refer to the erro code in esp_err.h"]
+    pub fn esp_wifi_set_config(interface: wifi_interface_t, conf: *mut wifi_config_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get configuration of specified interface"]
+    #[doc = ""]
+    #[doc = " @param     interface  interface"]
+    #[doc = " @param[out]  conf  station or soft-AP configuration"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - ESP_ERR_WIFI_IF: invalid interface"]
+    pub fn esp_wifi_get_config(interface: wifi_interface_t, conf: *mut wifi_config_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get STAs associated with soft-AP"]
+    #[doc = ""]
+    #[doc = " @attention SSC only API"]
+    #[doc = ""]
+    #[doc = " @param[out] sta  station list"]
+    #[doc = "             ap can get the connected sta's phy mode info through the struct member"]
+    #[doc = "             phy_11b，phy_11g，phy_11n，phy_lr in the wifi_sta_info_t struct."]
+    #[doc = "             For example, phy_11b = 1 imply that sta support 802.11b mode"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    #[doc = "    - ESP_ERR_WIFI_MODE: WiFi mode is wrong"]
+    #[doc = "    - ESP_ERR_WIFI_CONN: WiFi internal error, the station/soft-AP control block is invalid"]
+    pub fn esp_wifi_ap_get_sta_list(sta: *mut wifi_sta_list_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set the WiFi API configuration storage type"]
+    #[doc = ""]
+    #[doc = " @attention 1. The default value is WIFI_STORAGE_FLASH"]
+    #[doc = ""]
+    #[doc = " @param     storage : storage type"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "   - ESP_OK: succeed"]
+    #[doc = "   - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "   - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_set_storage(storage: wifi_storage_t) -> esp_err_t;
+}
+#[doc = " @brief     Function signature for received Vendor-Specific Information Element callback."]
+#[doc = " @param     ctx Context argument, as passed to esp_wifi_set_vendor_ie_cb() when registering callback."]
+#[doc = " @param     type Information element type, based on frame type received."]
+#[doc = " @param     sa Source 802.11 address."]
+#[doc = " @param     vnd_ie Pointer to the vendor specific element data received."]
+#[doc = " @param     rssi Received signal strength indication."]
+pub type esp_vendor_ie_cb_t = ::core::option::Option<
+    unsafe extern "C" fn(
+        ctx: *mut cty::c_void,
+        type_: wifi_vendor_ie_type_t,
+        sa: *const u8,
+        vnd_ie: *const vendor_ie_data_t,
+        rssi: cty::c_int,
+    ),
+>;
+extern "C" {
+    #[doc = " @brief     Set 802.11 Vendor-Specific Information Element"]
+    #[doc = ""]
+    #[doc = " @param     enable If true, specified IE is enabled. If false, specified IE is removed."]
+    #[doc = " @param     type Information Element type. Determines the frame type to associate with the IE."]
+    #[doc = " @param     idx  Index to set or clear. Each IE type can be associated with up to two elements (indices 0 & 1)."]
+    #[doc = " @param     vnd_ie Pointer to vendor specific element data. First 6 bytes should be a header with fields matching vendor_ie_data_t."]
+    #[doc = "            If enable is false, this argument is ignored and can be NULL. Data does not need to remain valid after the function returns."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init()"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: Invalid argument, including if first byte of vnd_ie is not WIFI_VENDOR_IE_ELEMENT_ID (0xDD)"]
+    #[doc = "      or second byte is an invalid length."]
+    #[doc = "    - ESP_ERR_NO_MEM: Out of memory"]
+    pub fn esp_wifi_set_vendor_ie(
+        enable: bool,
+        type_: wifi_vendor_ie_type_t,
+        idx: wifi_vendor_ie_id_t,
+        vnd_ie: *const cty::c_void,
+    ) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Register Vendor-Specific Information Element monitoring callback."]
+    #[doc = ""]
+    #[doc = " @param     cb   Callback function"]
+    #[doc = " @param     ctx  Context argument, passed to callback function."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    pub fn esp_wifi_set_vendor_ie_cb(cb: esp_vendor_ie_cb_t, ctx: *mut cty::c_void) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set maximum WiFi transmitting power"]
+    #[doc = ""]
+    #[doc = " @param     power  Maximum WiFi transmitting power, unit is 0.25dBm, range is [40, 82] corresponding to 10dBm - 20.5dBm here."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_START: WiFi is not started by esp_wifi_start"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_ARG: invalid argument"]
+    pub fn esp_wifi_set_max_tx_power(power: i8) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get maximum WiFi transmiting power"]
+    #[doc = ""]
+    #[doc = " @param     power  Maximum WiFi transmitting power, unit is 0.25dBm."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_START: WiFi is not started by esp_wifi_start"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_get_max_tx_power(power: *mut i8) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set mask to enable or disable some WiFi events"]
+    #[doc = ""]
+    #[doc = " @attention 1. Mask can be created by logical OR of various WIFI_EVENT_MASK_ constants."]
+    #[doc = "               Events which have corresponding bit set in the mask will not be delivered to the system event handler."]
+    #[doc = " @attention 2. Default WiFi event mask is WIFI_EVENT_MASK_AP_PROBEREQRECVED."]
+    #[doc = " @attention 3. There may be lots of stations sending probe request data around."]
+    #[doc = "               Don't unmask this event unless you need to receive probe request data."]
+    #[doc = ""]
+    #[doc = " @param     mask  WiFi event mask."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    pub fn esp_wifi_set_event_mask(mask: u32) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get mask of WiFi events"]
+    #[doc = ""]
+    #[doc = " @param     mask  WiFi event mask."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_ARG: invalid argument"]
+    pub fn esp_wifi_get_event_mask(mask: *mut u32) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Send raw ieee80211 data"]
+    #[doc = ""]
+    #[doc = " @attention Currently only support for sending beacon/probe request/probe response/action and non-QoS"]
+    #[doc = "            data frame"]
+    #[doc = ""]
+    #[doc = " @param     ifx interface if the Wi-Fi mode is Station, the ifx should be WIFI_IF_STA. If the Wi-Fi"]
+    #[doc = "            mode is SoftAP, the ifx should be WIFI_IF_AP. If the Wi-Fi mode is Station+SoftAP, the"]
+    #[doc = "            ifx should be WIFI_IF_STA or WIFI_IF_AP. If the ifx is wrong, the API returns ESP_ERR_WIFI_IF."]
+    #[doc = " @param     buffer raw ieee80211 buffer"]
+    #[doc = " @param     len the length of raw buffer, the len must be <= 1500 Bytes and >= 24 Bytes"]
+    #[doc = " @param     en_sys_seq indicate whether use the internal sequence number. If en_sys_seq is false, the"]
+    #[doc = "            sequence in raw buffer is unchanged, otherwise it will be overwritten by WiFi driver with"]
+    #[doc = "            the system sequence number."]
+    #[doc = "            Generally, if esp_wifi_80211_tx is called before the Wi-Fi connection has been set up, both"]
+    #[doc = "            en_sys_seq==true and en_sys_seq==false are fine. However, if the API is called after the Wi-Fi"]
+    #[doc = "            connection has been set up, en_sys_seq must be true, otherwise ESP_ERR_WIFI_ARG is returned."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: success"]
+    #[doc = "    - ESP_ERR_WIFI_IF: Invalid interface"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: Invalid parameter"]
+    #[doc = "    - ESP_ERR_WIFI_NO_MEM: out of memory"]
+    pub fn esp_wifi_80211_tx(
+        ifx: wifi_interface_t,
+        buffer: *const cty::c_void,
+        len: cty::c_int,
+        en_sys_seq: bool,
+    ) -> esp_err_t;
+}
+#[doc = " @brief The RX callback function of Channel State Information(CSI)  data."]
+#[doc = ""]
+#[doc = "        Each time a CSI data is received, the callback function will be called."]
+#[doc = ""]
+#[doc = " @param ctx context argument, passed to esp_wifi_set_csi_rx_cb() when registering callback function."]
+#[doc = " @param data CSI data received. The memory that it points to will be deallocated after callback function returns."]
+#[doc = ""]
+pub type wifi_csi_cb_t =
+    ::core::option::Option<unsafe extern "C" fn(ctx: *mut cty::c_void, data: *mut wifi_csi_info_t)>;
+extern "C" {
+    #[doc = " @brief Register the RX callback function of CSI data."]
+    #[doc = ""]
+    #[doc = "        Each time a CSI data is received, the callback function will be called."]
+    #[doc = ""]
+    #[doc = " @param cb  callback"]
+    #[doc = " @param ctx context argument, passed to callback function"]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    pub fn esp_wifi_set_csi_rx_cb(cb: wifi_csi_cb_t, ctx: *mut cty::c_void) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief Set CSI data configuration"]
+    #[doc = ""]
+    #[doc = " @param config configuration"]
+    #[doc = ""]
+    #[doc = " return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_START: WiFi is not started by esp_wifi_start or promiscuous mode is not enabled"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_set_csi_config(config: *const wifi_csi_config_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief Enable or disable CSI"]
+    #[doc = ""]
+    #[doc = " @param en true - enable, false - disable"]
+    #[doc = ""]
+    #[doc = " return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_START: WiFi is not started by esp_wifi_start or promiscuous mode is not enabled"]
+    #[doc = "    - ESP_ERR_INVALID_ARG: invalid argument"]
+    pub fn esp_wifi_set_csi(en: bool) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set antenna GPIO configuration"]
+    #[doc = ""]
+    #[doc = " @param     config  Antenna GPIO configuration."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_ARG: Invalid argument, e.g. parameter is NULL, invalid GPIO number etc"]
+    pub fn esp_wifi_set_ant_gpio(config: *const wifi_ant_gpio_config_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get current antenna GPIO configuration"]
+    #[doc = ""]
+    #[doc = " @param     config  Antenna GPIO configuration."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_ARG: invalid argument, e.g. parameter is NULL"]
+    pub fn esp_wifi_get_ant_gpio(config: *mut wifi_ant_gpio_config_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Set antenna configuration"]
+    #[doc = ""]
+    #[doc = " @param     config  Antenna configuration."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_ARG: Invalid argument, e.g. parameter is NULL, invalid antenna mode or invalid GPIO number"]
+    pub fn esp_wifi_set_ant(config: *const wifi_ant_config_t) -> esp_err_t;
+}
+extern "C" {
+    #[doc = " @brief     Get current antenna configuration"]
+    #[doc = ""]
+    #[doc = " @param     config  Antenna configuration."]
+    #[doc = ""]
+    #[doc = " @return"]
+    #[doc = "    - ESP_OK: succeed"]
+    #[doc = "    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init"]
+    #[doc = "    - ESP_ERR_WIFI_ARG: invalid argument, e.g. parameter is NULL"]
+    pub fn esp_wifi_get_ant(config: *mut wifi_ant_config_t) -> esp_err_t;
+}
 #[doc = " @brief Configuration for STA's HT2040 coexist management"]
 #[doc = ""]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct wifi_ht2040_coex_t {
     #[doc = "< Indicate whether STA's HT2040 coexist management is enabled or not"]
     pub enable: cty::c_int,
@@ -793,6 +2752,16 @@ pub union wifi_ioctl_config_t__bindgen_ty_1 {
     #[doc = "< Configuration of STA's HT2040 coexist management"]
     pub ht2040_coex: wifi_ht2040_coex_t,
     _bindgen_union_align: u32,
+}
+impl Default for wifi_ioctl_config_t__bindgen_ty_1 {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
+}
+impl Default for wifi_ioctl_config_t {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
 }
 #[repr(u32)]
 #[doc = " @brief WiFi log level"]
@@ -1090,4 +3059,9 @@ pub struct __va_list_tag {
     pub fp_offset: cty::c_uint,
     pub overflow_arg_area: *mut cty::c_void,
     pub reg_save_area: *mut cty::c_void,
+}
+impl Default for __va_list_tag {
+    fn default() -> Self {
+        unsafe { ::core::mem::zeroed() }
+    }
 }

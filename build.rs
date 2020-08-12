@@ -1,4 +1,5 @@
 fn main() {
+    // Add linker search path
     println!("cargo:rustc-link-search=esp32-wifi-lib/esp32");
 
     //println!("cargo:rustc-link-lib=espnow");

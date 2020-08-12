@@ -1,6 +1,156 @@
-use crate::binary::wifi::__va_list_tag;
+#![allow(unused_variables)]
 
-pub fn init_osi_funcs() -> crate::binary::wifi::wifi_osi_funcs_t {
+use crate::binary::wifi::__va_list_tag;
+use crate::wprintln;
+use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
+use alloc::raw_vec::RawVec;
+use cty::c_void;
+use esp32_hal::alloc::{Allocator, DEFAULT_ALLOCATOR, DRAM_ALLOCATOR};
+use esp32_hal::prelude::*;
+
+static mut ALLOCATIONS: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, RawVec<u8, Allocator>>> =
+    CriticalSectionSpinLockMutex::new(BTreeMap::new());
+
+const TRUE: i32 = 1;
+const FALSE: i32 = 0;
+
+const PASS: i32 = TRUE;
+const ESP_OK: i32 = 0;
+
+struct Queue {
+    wifi_queue: WifiStaticQueue,
+    item_size: usize,
+    count: usize,
+    send_index: usize,
+    receive_index: usize,
+}
+
+#[repr(C)]
+struct WifiStaticQueue {
+    handle: *mut c_void,
+    storage: *mut c_void,
+}
+
+#[repr(C)]
+struct SpinLock {
+    owner: u32,
+    count: u32,
+}
+const SPINLOCK_FREE: u32 = 0xB33FFFFF;
+
+impl SpinLock {
+    fn new() -> Self {
+        Self {
+            owner: SPINLOCK_FREE,
+            count: 0,
+        }
+    }
+}
+
+struct RecursiveMutex {
+    count: CriticalSectionSpinLockMutex<u32>,
+}
+
+impl RecursiveMutex {
+    const fn new() -> Self {
+        Self {
+            count: CriticalSectionSpinLockMutex::new(0),
+        }
+    }
+
+    fn lock(&self) -> u32 {
+        (&self.count).lock(|count| {
+            *count += 1;
+            *count
+        })
+    }
+    fn unlock(&self) -> u32 {
+        (&self.count).lock(|count| {
+            assert!(*count > 0);
+            *count -= 1;
+            *count
+        })
+    }
+}
+
+struct Semaphore {
+    count: CriticalSectionSpinLockMutex<u32>,
+    max: u32,
+}
+
+impl Semaphore {
+    const fn new(max: u32, initial: u32) -> Self {
+        Self {
+            max,
+            count: CriticalSectionSpinLockMutex::new(initial),
+        }
+    }
+
+    fn give(&self) -> bool {
+        (&self.count).lock(|count| {
+            if *count < self.max {
+                *count += 1;
+                true
+            } else {
+                false
+            }
+        })
+    }
+    fn take(&self) -> bool {
+        (&self.count).lock(|count| {
+            if *count > 0 {
+                *count -= 1;
+                true
+            } else {
+                false
+            }
+        })
+    }
+}
+
+static mut QUEUES: CriticalSectionSpinLockMutex<
+    BTreeMap<*mut c_void, Box<CriticalSectionSpinLockMutex<Queue>>>,
+> = CriticalSectionSpinLockMutex::new(BTreeMap::new());
+
+static mut SEMAPHORES: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<Semaphore>>> =
+    CriticalSectionSpinLockMutex::new(BTreeMap::new());
+
+static mut MUTEXES: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<RecursiveMutex>>> =
+    CriticalSectionSpinLockMutex::new(BTreeMap::new());
+
+static mut SPINLOCKS: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<SpinLock>>> =
+    CriticalSectionSpinLockMutex::new(BTreeMap::new());
+
+fn alloc(size: usize, internal: bool, zero: bool) -> *mut c_void {
+    let memory = RawVec::with_capacity_in(
+        size,
+        if internal {
+            DRAM_ALLOCATOR
+        } else {
+            DEFAULT_ALLOCATOR
+        },
+    );
+    if zero {
+        unsafe { core::ptr::write_bytes(memory.ptr(), 0, size) };
+    }
+    let address = memory.ptr() as *mut c_void;
+
+    unsafe {
+        (&ALLOCATIONS).lock(|allocations| allocations.insert(address, memory));
+    }
+
+    wprintln!(
+        "alloc({}, {}, {}) -> {:x}",
+        size,
+        internal,
+        zero,
+        address as u32
+    );
+    address
+}
+
+pub(crate) static mut WIFI_OS_FUNCS: crate::binary::wifi::wifi_osi_funcs_t =
     crate::binary::wifi::wifi_osi_funcs_t {
         _version: 0x00000004,
         _set_isr: Some(_set_isr),
@@ -98,121 +248,322 @@ pub fn init_osi_funcs() -> crate::binary::wifi::wifi_osi_funcs_t {
         _coex_wifi_request: Some(_coex_wifi_request),
         _coex_wifi_release: Some(_coex_wifi_release),
         _magic: 0xDEADBEAFu32 as i32,
-    }
-}
+    };
 
-pub unsafe extern "C" fn _set_isr(n: i32, f: *mut cty::c_void, arg: *mut cty::c_void) {
-    unimplemented!()
+pub unsafe extern "C" fn _set_isr(n: i32, f: *mut c_void, arg: *mut c_void) {
+    wprintln!("_set_isr({}, {:x}, {:x})", n, f as u32, arg as u32);
+    //    unimplemented!()
 }
 pub unsafe extern "C" fn _ints_on(mask: u32) {
-    unimplemented!()
+    wprintln!("_ints_on({})", mask);
+    //    unimplemented!()
 }
 pub unsafe extern "C" fn _ints_off(mask: u32) {
     unimplemented!()
 }
-pub unsafe extern "C" fn _spin_lock_create() -> *mut cty::c_void {
-    unimplemented!()
+pub unsafe extern "C" fn _spin_lock_create() -> *mut c_void {
+    //    unimplemented!()
+    let mut spinlock = Box::new(SpinLock::new());
+    let address = &mut *spinlock as *mut _ as *mut c_void;
+
+    (&SPINLOCKS).lock(|spinlocks| spinlocks.insert(address, spinlock));
+    wprintln!("_spin_lock_create() -> {:x}", address as u32);
+    address
 }
-pub unsafe extern "C" fn _spin_lock_delete(lock: *mut cty::c_void) {
-    unimplemented!()
+
+pub unsafe extern "C" fn _spin_lock_delete(lock: *mut c_void) {
+    wprintln!("_spin_lock_delete");
+    // unimplemented!()
 }
-pub unsafe extern "C" fn _wifi_int_disable(wifi_int_mux: *mut cty::c_void) -> u32 {
-    unimplemented!()
+
+static mut INT_MASK: u32 = 0;
+
+pub unsafe extern "C" fn _wifi_int_disable(wifi_int_mux: *mut c_void) -> u32 {
+    wprintln!("_wifi_int_disable({:x?})", wifi_int_mux as u32);
+
+    // disable interrupts and store old mask
+    INT_MASK = xtensa_lx6::interrupt::disable();
+
+    0
+    //unimplemented!()
 }
-pub unsafe extern "C" fn _wifi_int_restore(wifi_int_mux: *mut cty::c_void, tmp: u32) {
-    unimplemented!()
+
+pub unsafe extern "C" fn _wifi_int_restore(wifi_int_mux: *mut c_void, tmp: u32) {
+    wprintln!("_wifi_int_restore({:x?}, {:x?})", wifi_int_mux as u32, tmp);
+
+    // enable previously disable interrupts
+    xtensa_lx6::interrupt::enable_mask(INT_MASK);
+
+    //unimplemented!()
 }
 pub unsafe extern "C" fn _task_yield_from_isr() {
     unimplemented!()
 }
-pub unsafe extern "C" fn _semphr_create(max: u32, init: u32) -> *mut cty::c_void {
+
+fn create_mutex() -> *mut c_void {
+    let mut mutex = Box::new(RecursiveMutex::new());
+    let address = &mut *mutex as *mut _ as *mut c_void;
+
+    unsafe { (&MUTEXES).lock(|mutexes| mutexes.insert(address, mutex)) };
+
+    wprintln!("create_mutex() -> {:x}", address as u32);
+    address
+}
+
+fn create_semaphore(max: u32, init: u32) -> *mut c_void {
+    let mut semaphore = Box::new(Semaphore::new(max, init));
+    let address = &mut *semaphore as *mut _ as *mut c_void;
+
+    unsafe { (&SEMAPHORES).lock(|semaphores| semaphores.insert(address, semaphore)) };
+
+    wprintln!(
+        "create_semaphore({}, {}) -> {:x}",
+        max,
+        init,
+        address as u32
+    );
+    address
+}
+
+pub unsafe extern "C" fn _semphr_create(max: u32, init: u32) -> *mut c_void {
+    let address = create_semaphore(max, init);
+    wprintln!("_semphr_create({}, {}) -> {:x}", max, init, address as u32);
+    address
+}
+
+pub unsafe extern "C" fn _semphr_delete(semphr: *mut c_void) {
+    wprintln!("_semphr_delete({:x?})", semphr as u32);
+
+    (&SEMAPHORES).lock(|semaphores| semaphores.remove(&semphr));
+}
+pub unsafe extern "C" fn _semphr_take(semphr: *mut c_void, block_time_tick: u32) -> i32 {
+    wprintln!("_semphr_take({:x?}, {})", semphr as u32, block_time_tick);
+
+    if block_time_tick == 0 {
+        (&SEMAPHORES).lock(|semaphores| {
+            let semaphore = semaphores.get(&semphr).unwrap();
+            if semaphore.take() {
+                wprintln!("_semphr_take -> {}", TRUE);
+                return TRUE;
+            } else {
+                wprintln!("_semphr_take -> {}", FALSE);
+                return FALSE;
+            }
+        });
+    };
+
+    loop {
+        if (&SEMAPHORES).lock(|semaphores| {
+            let semaphore = semaphores.get(&semphr).unwrap();
+            semaphore.take()
+        }) {
+            wprintln!("_semphr_take -> {}", TRUE);
+            return TRUE;
+        }
+    }
+}
+pub unsafe extern "C" fn _semphr_give(semphr: *mut c_void) -> i32 {
+    wprintln!("_semphr_give({:x?})", semphr as u32);
+
+    (&SEMAPHORES).lock(|semaphores| {
+        let semaphore = semaphores.get(&semphr).unwrap();
+        semaphore.give();
+    });
+    PASS
+}
+
+static mut THREAD_SEMAPHORE_APP: Option<*mut c_void> = None;
+static mut THREAD_SEMAPHORE_PRO: Option<*mut c_void> = None;
+
+pub unsafe extern "C" fn _wifi_thread_semphr_get() -> *mut c_void {
+    let semaphore = match esp32_hal::get_core() {
+        esp32_hal::Core::APP => &mut THREAD_SEMAPHORE_APP,
+        esp32_hal::Core::PRO => &mut THREAD_SEMAPHORE_PRO,
+    };
+    let address = match semaphore {
+        None => {
+            let address = create_semaphore(1, 0);
+            *semaphore = Some(address);
+            address
+        }
+        Some(address) => *address,
+    };
+
+    wprintln!("_wifi_thread_semphr_get -> {:x}", address as u32);
+    address
+    // unimplemented!()
+}
+pub unsafe extern "C" fn _mutex_create() -> *mut c_void {
     unimplemented!()
 }
-pub unsafe extern "C" fn _semphr_delete(semphr: *mut cty::c_void) {
+pub unsafe extern "C" fn _recursive_mutex_create() -> *mut c_void {
+    //    unimplemented!()
+    wprintln!("_recursive_mutex_create");
+    create_mutex()
+}
+pub unsafe extern "C" fn _mutex_delete(mutex: *mut c_void) {
     unimplemented!()
 }
-pub unsafe extern "C" fn _semphr_take(semphr: *mut cty::c_void, block_time_tick: u32) -> i32 {
+pub unsafe extern "C" fn _mutex_lock(mutex: *mut c_void) -> i32 {
+    wprintln!("_mutex_lock ({:x?})", mutex);
+
+    (&MUTEXES).lock(|mutexes| {
+        let mutex = mutexes.get(&mutex).unwrap();
+        mutex.lock();
+    });
+    //    unimplemented!()
+    TRUE
+}
+pub unsafe extern "C" fn _mutex_unlock(mutex: *mut c_void) -> i32 {
+    //    unimplemented!()
+    wprintln!("_mutex_unlock ({:x?})", mutex);
+    (&MUTEXES).lock(|mutexes| {
+        let mutex = mutexes.get(&mutex).unwrap();
+        mutex.unlock();
+    });
+    TRUE
+}
+pub unsafe extern "C" fn _queue_create(queue_len: u32, item_size: u32) -> *mut c_void {
     unimplemented!()
 }
-pub unsafe extern "C" fn _semphr_give(semphr: *mut cty::c_void) -> i32 {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _wifi_thread_semphr_get() -> *mut cty::c_void {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _mutex_create() -> *mut cty::c_void {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _recursive_mutex_create() -> *mut cty::c_void {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _mutex_delete(mutex: *mut cty::c_void) {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _mutex_lock(mutex: *mut cty::c_void) -> i32 {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _mutex_unlock(mutex: *mut cty::c_void) -> i32 {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _queue_create(queue_len: u32, item_size: u32) -> *mut cty::c_void {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _queue_delete(queue: *mut cty::c_void) {
+pub unsafe extern "C" fn _queue_delete(queue: *mut c_void) {
     unimplemented!()
 }
 pub unsafe extern "C" fn _queue_send(
-    queue: *mut cty::c_void,
-    item: *mut cty::c_void,
+    queue: *mut c_void,
+    item: *mut c_void,
     block_time_tick: u32,
 ) -> i32 {
-    unimplemented!()
+    wprintln!(
+        "_queue_send({:x?}, {:x?}, {})",
+        queue,
+        item,
+        block_time_tick,
+    );
+
+    (&QUEUES).lock(|queues| {
+        let queue = (*queues).get(&queue).unwrap();
+
+        (&(**queue)).lock(|queue| {
+            if (queue.send_index + queue.count) % queue.count
+                == (queue.receive_index + queue.count - 1) % queue.count
+            {
+                wprintln!("_queue_send -> FALSE");
+                return FALSE;
+            }
+            core::ptr::copy(
+                item,
+                queue
+                    .wifi_queue
+                    .storage
+                    .add(queue.send_index * queue.item_size),
+                queue.item_size,
+            );
+            queue.send_index = (queue.send_index + 1) % queue.count;
+            wprintln!(
+                "_queue_send {:08x} {:08x} {} -> TRUE",
+                *(item as *mut u32),
+                *((item as u32 + 4) as *mut u32),
+                queue.item_size
+            );
+            TRUE
+        })
+    })
 }
+
 pub unsafe extern "C" fn _queue_send_from_isr(
-    queue: *mut cty::c_void,
-    item: *mut cty::c_void,
-    hptw: *mut cty::c_void,
+    queue: *mut c_void,
+    item: *mut c_void,
+    hptw: *mut c_void,
 ) -> i32 {
     unimplemented!()
 }
 pub unsafe extern "C" fn _queue_send_to_back(
-    queue: *mut cty::c_void,
-    item: *mut cty::c_void,
+    queue: *mut c_void,
+    item: *mut c_void,
     block_time_tick: u32,
 ) -> i32 {
     unimplemented!()
 }
 pub unsafe extern "C" fn _queue_send_to_front(
-    queue: *mut cty::c_void,
-    item: *mut cty::c_void,
+    queue: *mut c_void,
+    item: *mut c_void,
     block_time_tick: u32,
 ) -> i32 {
     unimplemented!()
 }
 pub unsafe extern "C" fn _queue_recv(
-    queue: *mut cty::c_void,
-    item: *mut cty::c_void,
+    queue: *mut c_void,
+    item: *mut c_void,
     block_time_tick: u32,
 ) -> i32 {
+    wprintln!(
+        "_queue_recv({:x?}, {:x?}, {:x?})",
+        queue,
+        item,
+        block_time_tick,
+    );
+
+    //unimplemented!()
+    loop {
+        let res = (&QUEUES).lock(|queues| {
+            let queue = (*queues).get(&queue).unwrap();
+
+            (&(**queue)).lock(|queue| {
+                if queue.send_index == queue.receive_index {
+                    FALSE
+                } else {
+                    core::ptr::copy(
+                        queue
+                            .wifi_queue
+                            .storage
+                            .add(queue.receive_index * queue.item_size),
+                        item,
+                        queue.item_size,
+                    );
+                    queue.receive_index = (queue.receive_index + 1) % queue.count;
+                    wprintln!(
+                        "_queue_recv {:08x} {:08x} {} -> TRUE",
+                        *(item as *mut u32),
+                        *((item as u32 + 4) as *mut u32),
+                        queue.item_size
+                    );
+                    TRUE
+                }
+            })
+        });
+
+        if res == TRUE || block_time_tick != u32::MAX {
+            wprintln!("_queue_recv -> {}", res);
+
+            return res;
+        }
+    }
+}
+pub unsafe extern "C" fn _queue_msg_waiting(queue: *mut c_void) -> u32 {
+    wprintln!("_queue_msg_waiting({:x?})", queue,);
+
+    (&QUEUES).lock(|queues| {
+        let queue = (*queues).get(&queue).unwrap();
+
+        (&(**queue))
+            .lock(|queue| (queue.send_index + queue.count - queue.receive_index) % queue.count)
+    }) as u32
+}
+pub unsafe extern "C" fn _event_group_create() -> *mut c_void {
     unimplemented!()
 }
-pub unsafe extern "C" fn _queue_msg_waiting(queue: *mut cty::c_void) -> u32 {
+pub unsafe extern "C" fn _event_group_delete(event: *mut c_void) {
     unimplemented!()
 }
-pub unsafe extern "C" fn _event_group_create() -> *mut cty::c_void {
+pub unsafe extern "C" fn _event_group_set_bits(event: *mut c_void, bits: u32) -> u32 {
     unimplemented!()
 }
-pub unsafe extern "C" fn _event_group_delete(event: *mut cty::c_void) {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _event_group_set_bits(event: *mut cty::c_void, bits: u32) -> u32 {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _event_group_clear_bits(event: *mut cty::c_void, bits: u32) -> u32 {
+pub unsafe extern "C" fn _event_group_clear_bits(event: *mut c_void, bits: u32) -> u32 {
     unimplemented!()
 }
 pub unsafe extern "C" fn _event_group_wait_bits(
-    event: *mut cty::c_void,
+    event: *mut c_void,
     bits_to_wait_for: u32,
     clear_on_exit: i32,
     wait_for_all_bits: i32,
@@ -220,52 +571,95 @@ pub unsafe extern "C" fn _event_group_wait_bits(
 ) -> u32 {
     unimplemented!()
 }
+
+static mut TASK_FUNC: Option<extern "C" fn(params: *mut c_void)> = None;
+
+fn cpu1_start() -> ! {
+    unsafe {
+        if let Some(func) = TASK_FUNC {
+            func(0 as *mut c_void);
+        }
+    }
+    wprintln!("Wifi Task returned!");
+    loop {}
+}
+
 pub unsafe extern "C" fn _task_create_pinned_to_core(
-    task_func: *mut cty::c_void,
+    task_func: *mut c_void,
     name: *const cty::c_char,
     stack_depth: u32,
-    param: *mut cty::c_void,
+    param: *mut c_void,
     prio: u32,
-    task_handle: *mut cty::c_void,
+    task_handle: *mut c_void,
     core_id: u32,
 ) -> i32 {
-    unimplemented!()
+    wprintln!(
+        "_task_create_pinned_to_core({:x}, {}, {}, {}, {:x}, {:x}, {})",
+        task_func as u32,
+        cstr_core::CStr::from_ptr(name).to_str().unwrap(),
+        stack_depth,
+        param as u32,
+        prio,
+        task_handle as u32,
+        core_id
+    );
+    TASK_FUNC = Some(core::mem::transmute(task_func));
+    *(task_handle as *mut u32) = 2;
+
+    esp32_hal::clock_control::ClockControlConfig {}
+        .start_app_core(cpu1_start)
+        .unwrap();
+
+    PASS
+    //unimplemented!()
 }
 pub unsafe extern "C" fn _task_create(
-    task_func: *mut cty::c_void,
+    task_func: *mut c_void,
     name: *const cty::c_char,
     stack_depth: u32,
-    param: *mut cty::c_void,
+    param: *mut c_void,
     prio: u32,
-    task_handle: *mut cty::c_void,
+    task_handle: *mut c_void,
 ) -> i32 {
     unimplemented!()
 }
-pub unsafe extern "C" fn _task_delete(task_handle: *mut cty::c_void) {
-    unimplemented!()
+pub unsafe extern "C" fn _task_delete(task_handle: *mut c_void) {
+    wprintln!("_task_delete({:x})", task_handle as u32);
+    // unimplemented!();
 }
 pub unsafe extern "C" fn _task_delay(tick: u32) {
-    unimplemented!()
+    wprintln!("_task_delay({})", tick);
+
+    xtensa_lx6::timer::delay(tick);
+    //    unimplemented!()
 }
 pub unsafe extern "C" fn _task_ms_to_tick(ms: u32) -> i32 {
-    unimplemented!()
+    let ticks = ms.ms() * esp32_hal::clock_control::ClockControlConfig {}.cpu_frequency();
+    wprintln!("_task_ms_to_tick({}) -> {}", ms, ticks);
+    (ticks / Ticks(1)) as i32
+    // unimplemented!()
 }
-pub unsafe extern "C" fn _task_get_current_task() -> *mut cty::c_void {
-    unimplemented!()
+pub unsafe extern "C" fn _task_get_current_task() -> *mut c_void {
+    // unimplemented!()
+    esp32_hal::get_core() as u32 as *mut c_void
 }
 pub unsafe extern "C" fn _task_get_max_priority() -> i32 {
+    wprintln!("_task_get_max_priority");
+    1
+}
+pub unsafe extern "C" fn _malloc(size: u32) -> *mut c_void {
     unimplemented!()
 }
-pub unsafe extern "C" fn _malloc(size: u32) -> *mut cty::c_void {
-    unimplemented!()
+
+pub unsafe extern "C" fn _free(p: *mut c_void) {
+    wprintln!("_free({:x?})", p);
+    (&ALLOCATIONS).lock(|allocations| allocations.remove(&p));
 }
-pub unsafe extern "C" fn _free(p: *mut cty::c_void) {
-    unimplemented!()
-}
+
 pub unsafe extern "C" fn _event_post(
     event_base: *const cty::c_char,
     event_id: i32,
-    event_data: *mut cty::c_void,
+    event_data: *mut c_void,
     event_data_size: usize,
     ticks_to_wait: u32,
 ) -> i32 {
@@ -286,42 +680,331 @@ pub unsafe extern "C" fn _dport_access_stall_other_cpu_end_wrap() {
 pub unsafe extern "C" fn _phy_rf_deinit(module: u32) -> i32 {
     unimplemented!()
 }
-pub unsafe extern "C" fn _phy_load_cal_and_init(module: u32) {
-    unimplemented!()
+
+const CONFIG_ESP32_PHY_MAX_TX_POWER: u8 = 20;
+
+const fn limit(val: u8, low: u8, high: u8) -> u8 {
+    if val < low {
+        low
+    } else if val > high {
+        high
+    } else {
+        val
+    }
 }
+
+const PHY_DEFAULT_CALIBRATION_DATA: crate::binary::phy::esp_phy_calibration_data_t =
+    crate::binary::phy::esp_phy_calibration_data_t {
+        version: [0; 4],
+        mac: [0; 6],
+        opaque: [0; 1894],
+    };
+
+const PHY_DEFAULT_INIT_DATA: crate::binary::phy::esp_phy_init_data_t =
+    crate::binary::phy::esp_phy_init_data_t {
+        params: [
+            3,
+            3,
+            0x05,
+            0x09,
+            0x06,
+            0x05,
+            0x03,
+            0x06,
+            0x05,
+            0x04,
+            0x06,
+            0x04,
+            0x05,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x05,
+            0x09,
+            0x06,
+            0x05,
+            0x03,
+            0x06,
+            0x05,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0xfc,
+            0xfc,
+            0xfe,
+            0xf0,
+            0xf0,
+            0xf0,
+            0xe0,
+            0xe0,
+            0xe0,
+            0x18,
+            0x18,
+            0x18,
+            limit(CONFIG_ESP32_PHY_MAX_TX_POWER * 4, 40, 78),
+            limit(CONFIG_ESP32_PHY_MAX_TX_POWER * 4, 40, 72),
+            limit(CONFIG_ESP32_PHY_MAX_TX_POWER * 4, 40, 66),
+            limit(CONFIG_ESP32_PHY_MAX_TX_POWER * 4, 40, 60),
+            limit(CONFIG_ESP32_PHY_MAX_TX_POWER * 4, 40, 56),
+            limit(CONFIG_ESP32_PHY_MAX_TX_POWER * 4, 40, 52),
+            0,
+            1,
+            1,
+            2,
+            2,
+            3,
+            4,
+            5,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
+    };
+
+pub unsafe extern "C" fn _phy_load_cal_and_init(module: u32) {
+    wprintln!("_phy_load_cal_and_init({})", module);
+
+    /*
+    // TODO: implement timer correction routines
+
+    //  * @param     uint32_t time_delta : time duration since the WiFi/BT common clock is disabled
+    // esp_err_t esp_wifi_internal_update_mac_time( uint32_t time_delta );
+        // Update time stamp
+        s_phy_rf_en_ts = esp_timer_get_time();
+        phy_update_wifi_mac_time(false, s_phy_rf_en_ts);
+
+        */
+
+    _phy_common_clock_enable();
+    crate::binary::phy::phy_set_wifi_mode_only(false);
+
+    // TODO: implement modem sleep
+
+    //esp_phy_calibration_data_t* cal_data =
+    //(esp_phy_calibration_data_t*) calloc(sizeof(esp_phy_calibration_data_t), 1);
+    //    const esp_phy_init_data_t* init_data = esp_phy_get_init_data();
+
+    //    if (ESP_CAL_DATA_CHECK_FAIL ==
+    let res = crate::binary::phy::register_chipv7_phy(
+        &PHY_DEFAULT_INIT_DATA,
+        &mut PHY_DEFAULT_CALIBRATION_DATA,
+        crate::binary::phy::esp_phy_calibration_mode_t::PHY_RF_CAL_FULL,
+    );
+
+    crate::binary::phy::coex_bt_high_prio();
+
+    // TODO: implement software coexistence
+    //                         coex_init();    coex_resume();
+
+    //unimplemented!()
+}
+
+static mut PHY_COMMON_CLOCK_REF_COUNT: CriticalSectionSpinLockMutex<u32> =
+    CriticalSectionSpinLockMutex::new(0);
+
 pub unsafe extern "C" fn _phy_common_clock_enable() {
-    unimplemented!()
+    wprintln!("_phy_common_clock_enable");
+
+    (&PHY_COMMON_CLOCK_REF_COUNT).lock(|count| {
+        esp32_hal::dport::enable_peripheral(esp32_hal::dport::Peripheral::WIFI_BT_COMMON);
+        *count += 1;
+    });
 }
 pub unsafe extern "C" fn _phy_common_clock_disable() {
+    wprintln!("_phy_common_clock_disable");
+
+    (&PHY_COMMON_CLOCK_REF_COUNT).lock(|count| {
+        if *count == 0 {
+            panic!("_phy_common_clock_disable called more often then _phy_common_clock_enable")
+        } else if *count == 1 {
+            esp32_hal::dport::disable_peripheral(esp32_hal::dport::Peripheral::WIFI_BT_COMMON);
+        }
+
+        *count -= 1;
+    });
+}
+
+#[allow(dead_code)]
+enum MACType {
+    Station = 0,
+    AccessPoint = 1,
+    Bluetooth = 2,
+    Ethernet = 3,
+}
+
+pub unsafe extern "C" fn _read_mac(mac: *mut u8, mac_type: u32) -> i32 {
+    if mac_type > MACType::Ethernet as u32 {
+        wprintln!("_read_mac({:x} , {}) -> FALSE ", mac as u32, mac_type);
+        return FALSE;
+    }
+
+    let mut efuse_mac = esp32_hal::efuse::Efuse::get_mac_address();
+    efuse_mac[5] += mac_type as u8;
+
+    core::ptr::copy(
+        &mut efuse_mac as *mut _ as *mut u8,
+        mac,
+        core::mem::size_of_val(&efuse_mac),
+    );
+
+    wprintln!(
+        "_read_mac({:x} -> {:x?}, {}) -> TRUE ",
+        mac as u32,
+        efuse_mac,
+        mac_type
+    );
+    TRUE
+}
+pub unsafe extern "C" fn _timer_arm(timer: *mut c_void, tmout: u32, repeat: bool) {
+    wprintln!("_timer_arm({:x}, {}, {})", timer as u32, tmout, repeat);
+    //    unimplemented!()
+}
+pub unsafe extern "C" fn _timer_disarm(timer: *mut c_void) {
     unimplemented!()
 }
-pub unsafe extern "C" fn _read_mac(mac: *mut u8, type_: u32) -> i32 {
-    unimplemented!()
+
+#[repr(C)]
+struct ETSTimer {
+    next: *mut ETSTimer,
+    expire: u32,
+    period: u32,
+    func: extern "C" fn(args: *mut c_void),
+    arg: *mut c_void,
 }
-pub unsafe extern "C" fn _timer_arm(timer: *mut cty::c_void, tmout: u32, repeat: bool) {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _timer_disarm(timer: *mut cty::c_void) {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _timer_done(ptimer: *mut cty::c_void) {
-    unimplemented!()
+
+pub unsafe extern "C" fn _timer_done(ptimer: *mut c_void) {
+    let etstimer: *mut ETSTimer = ptimer as *mut ETSTimer;
+    wprintln!(
+        "_timer_done({:x?}) {:x} {} {} {:x} {:x}",
+        ptimer,
+        (*etstimer).next as u32,
+        (*etstimer).expire,
+        (*etstimer).period,
+        (*etstimer).func as u32,
+        (*etstimer).arg as u32
+    );
+    //unimplemented!()
 }
 pub unsafe extern "C" fn _timer_setfn(
-    ptimer: *mut cty::c_void,
-    pfunction: *mut cty::c_void,
-    parg: *mut cty::c_void,
+    ptimer: *mut c_void,
+    pfunction: *mut c_void,
+    parg: *mut c_void,
 ) {
+    let etstimer: *mut ETSTimer = ptimer as *mut ETSTimer;
+    wprintln!(
+        "_timer_setfn({:x?}, {:x?}, {:x?}) {:x} {} {} {:x} {:x}",
+        ptimer,
+        pfunction,
+        parg,
+        (*etstimer).next as u32,
+        (*etstimer).expire,
+        (*etstimer).period,
+        (*etstimer).func as u32,
+        (*etstimer).arg as u32
+    );
+    //    unimplemented!()
+}
+pub unsafe extern "C" fn _timer_arm_us(ptimer: *mut c_void, us: u32, repeat: bool) {
     unimplemented!()
 }
-pub unsafe extern "C" fn _timer_arm_us(ptimer: *mut cty::c_void, us: u32, repeat: bool) {
-    unimplemented!()
+
+const PERIPHERAL_WIFI: u32 = 27;
+const PERIPHERAL_BT: u32 = 28;
+const PERIPHERAL_WIFI_BT_COMMON: u32 = 29;
+const PERIPHERAL_BT_BASEBAND: u32 = 30;
+const PERIPHERAL_BT_LC: u32 = 31;
+
+fn map_to_peripheral(periph: u32) -> esp32_hal::dport::Peripheral {
+    match periph {
+        PERIPHERAL_WIFI => esp32_hal::dport::Peripheral::WIFI,
+        PERIPHERAL_BT => esp32_hal::dport::Peripheral::BT,
+        PERIPHERAL_WIFI_BT_COMMON => esp32_hal::dport::Peripheral::WIFI_BT_COMMON,
+        PERIPHERAL_BT_BASEBAND => esp32_hal::dport::Peripheral::BT_BASEBAND,
+        PERIPHERAL_BT_LC => esp32_hal::dport::Peripheral::BT_LC,
+        _ => unimplemented!(),
+    }
 }
+
 pub unsafe extern "C" fn _periph_module_enable(periph: u32) {
-    unimplemented!()
+    wprintln!("_periph_module_enable({})", periph);
+    esp32_hal::dport::enable_peripheral(map_to_peripheral(periph));
 }
 pub unsafe extern "C" fn _periph_module_disable(periph: u32) {
-    unimplemented!()
+    wprintln!("_periph_module_disable({})", periph);
+    esp32_hal::dport::disable_peripheral(map_to_peripheral(periph));
 }
 pub unsafe extern "C" fn _esp_timer_get_time() -> i64 {
     unimplemented!()
@@ -372,7 +1055,7 @@ pub unsafe extern "C" fn _nvs_commit(handle: u32) -> i32 {
 pub unsafe extern "C" fn _nvs_set_blob(
     handle: u32,
     key: *const cty::c_char,
-    value: *const cty::c_void,
+    value: *const c_void,
     length: usize,
 ) -> i32 {
     unimplemented!()
@@ -380,7 +1063,7 @@ pub unsafe extern "C" fn _nvs_set_blob(
 pub unsafe extern "C" fn _nvs_get_blob(
     handle: u32,
     key: *const cty::c_char,
-    out_value: *mut cty::c_void,
+    out_value: *mut c_void,
     length: *mut usize,
 ) -> i32 {
     unimplemented!()
@@ -391,7 +1074,7 @@ pub unsafe extern "C" fn _nvs_erase_key(handle: u32, key: *const cty::c_char) ->
 pub unsafe extern "C" fn _get_random(buf: *mut u8, len: usize) -> i32 {
     unimplemented!()
 }
-pub unsafe extern "C" fn _get_time(t: *mut cty::c_void) -> i32 {
+pub unsafe extern "C" fn _get_time(t: *mut c_void) -> i32 {
     unimplemented!()
 }
 pub unsafe extern "C" fn _random() -> cty::c_ulong {
@@ -401,9 +1084,17 @@ pub unsafe extern "C" fn _log_write(
     level: u32,
     tag: *const cty::c_char,
     format: *const cty::c_char,
-    ...
+    mut args: ...
 ) {
-    unimplemented!()
+    let a: u32 = args.arg();
+    wprintln!(
+        "_log_write({}, {}, {}, {:x?})",
+        level,
+        cstr_core::CStr::from_ptr(tag).to_str().unwrap(),
+        cstr_core::CStr::from_ptr(format).to_str().unwrap(),
+        a
+    );
+    // unimplemented!()
 }
 pub unsafe extern "C" fn _log_writev(
     level: u32,
@@ -411,49 +1102,94 @@ pub unsafe extern "C" fn _log_writev(
     format: *const cty::c_char,
     args: *mut __va_list_tag,
 ) {
-    unimplemented!()
+    wprintln!(
+        "_log_writev({}, {}, {}, ...)",
+        level,
+        cstr_core::CStr::from_ptr(tag).to_str().unwrap(),
+        cstr_core::CStr::from_ptr(format).to_str().unwrap(),
+    );
+    //    unimplemented!()
 }
 pub unsafe extern "C" fn _log_timestamp() -> u32 {
+    // unimplemented!()
+    1
+}
+
+pub unsafe extern "C" fn _malloc_internal(size: usize) -> *mut c_void {
+    wprintln!("_malloc_internal({})", size);
+    alloc(size, true, false)
+}
+
+pub unsafe extern "C" fn _realloc_internal(ptr: *mut c_void, size: usize) -> *mut c_void {
     unimplemented!()
 }
-pub unsafe extern "C" fn _malloc_internal(size: usize) -> *mut cty::c_void {
+pub unsafe extern "C" fn _calloc_internal(n: usize, size: usize) -> *mut c_void {
     unimplemented!()
 }
-pub unsafe extern "C" fn _realloc_internal(ptr: *mut cty::c_void, size: usize) -> *mut cty::c_void {
+pub unsafe extern "C" fn _zalloc_internal(size: usize) -> *mut c_void {
+    wprintln!("_zalloc_internal({})", size);
+    alloc(size, true, true)
+}
+pub unsafe extern "C" fn _wifi_malloc(size: usize) -> *mut c_void {
+    wprintln!("_wifi_malloc({})", size);
+    alloc(size, false, false)
+}
+pub unsafe extern "C" fn _wifi_realloc(ptr: *mut c_void, size: usize) -> *mut c_void {
     unimplemented!()
 }
-pub unsafe extern "C" fn _calloc_internal(n: usize, size: usize) -> *mut cty::c_void {
-    unimplemented!()
+pub unsafe extern "C" fn _wifi_calloc(n: usize, size: usize) -> *mut c_void {
+    wprintln!("_wifi_calloc({})", size);
+    alloc(n * size, false, true)
 }
-pub unsafe extern "C" fn _zalloc_internal(size: usize) -> *mut cty::c_void {
-    unimplemented!()
+pub unsafe extern "C" fn _wifi_zalloc(size: usize) -> *mut c_void {
+    wprintln!("_wifi_zalloc({})", size);
+    alloc(size, false, true)
 }
-pub unsafe extern "C" fn _wifi_malloc(size: usize) -> *mut cty::c_void {
-    unimplemented!()
+
+pub unsafe extern "C" fn _wifi_create_queue(queue_len: i32, item_size: i32) -> *mut c_void {
+    //unimplemented!()
+    let queue = Box::new(CriticalSectionSpinLockMutex::new(Queue {
+        wifi_queue: WifiStaticQueue {
+            handle: 0 as *mut c_void,
+            storage: alloc(queue_len as usize * item_size as usize, true, true),
+        },
+        count: queue_len as usize,
+        item_size: item_size as usize,
+        send_index: 0,
+        receive_index: 0,
+    }));
+    let address = (&*queue).lock(|queue| {
+        let address = &mut (*queue).wifi_queue as *mut _ as *mut c_void;
+        (*queue).wifi_queue.handle = address;
+        address
+    });
+    (&QUEUES).lock(|queues| queues.insert(address, queue));
+
+    wprintln!(
+        "_wifi_create_queue({}, {}) -> {:x?}",
+        queue_len,
+        item_size,
+        address
+    );
+    address
 }
-pub unsafe extern "C" fn _wifi_realloc(ptr: *mut cty::c_void, size: usize) -> *mut cty::c_void {
-    unimplemented!()
+pub unsafe extern "C" fn _wifi_delete_queue(queue: *mut c_void) {
+    wprintln!("_wifi_delete_queue({:x?})", queue as u32);
+    //unimplemented!()
 }
-pub unsafe extern "C" fn _wifi_calloc(n: usize, size: usize) -> *mut cty::c_void {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _wifi_zalloc(size: usize) -> *mut cty::c_void {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _wifi_create_queue(queue_len: i32, item_size: i32) -> *mut cty::c_void {
-    unimplemented!()
-}
-pub unsafe extern "C" fn _wifi_delete_queue(queue: *mut cty::c_void) {
-    unimplemented!()
-}
+
 pub unsafe extern "C" fn _modem_sleep_enter(module: u32) -> i32 {
     unimplemented!()
 }
 pub unsafe extern "C" fn _modem_sleep_exit(module: u32) -> i32 {
-    unimplemented!()
+    wprintln!("_modem_sleep_exit({})", module);
+    //    unimplemented!()
+    ESP_OK
 }
 pub unsafe extern "C" fn _modem_sleep_register(module: u32) -> i32 {
-    unimplemented!()
+    wprintln!("_modem_sleep_register({})", module);
+    //    unimplemented!()
+    ESP_OK
 }
 pub unsafe extern "C" fn _modem_sleep_deregister(module: u32) -> i32 {
     unimplemented!()
@@ -465,8 +1201,12 @@ pub unsafe extern "C" fn _coex_condition_set(type_: u32, dissatisfy: bool) {
     unimplemented!()
 }
 pub unsafe extern "C" fn _coex_wifi_request(event: u32, latency: u32, duration: u32) -> i32 {
-    unimplemented!()
+    wprintln!("_coex_wifi_request({}, {}, {})", event, latency, duration);
+    // unimplemented!()
+    return 0; // use hardware coexistance
 }
 pub unsafe extern "C" fn _coex_wifi_release(event: u32) -> i32 {
-    unimplemented!()
+    wprintln!("_coex_wifi_release({})", event);
+    // unimplemented!()
+    return 0; // use hardware coexistance
 }

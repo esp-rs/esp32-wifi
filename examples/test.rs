@@ -1,11 +1,12 @@
 #![no_std]
 #![no_main]
+#![feature(alloc_error_handler)]
 
 use core::{fmt::Write, panic::PanicInfo};
 use cstr_core::CStr;
 
 use esp32_hal::{
-    clock_control::{sleep, ClockControl, XTAL_FREQUENCY_AUTO},
+    clock_control::{sleep, ClockControl, ClockControlConfig, XTAL_FREQUENCY_AUTO},
     dport::Split,
     dprintln,
     prelude::*,
@@ -14,11 +15,25 @@ use esp32_hal::{
     timer::Timer,
 };
 
+use esp32_hal::alloc::{Allocator, DEFAULT_ALLOCATOR};
+
+#[global_allocator]
+pub static GLOBAL_ALLOCATOR: Allocator = DEFAULT_ALLOCATOR;
+
+#[alloc_error_handler]
+fn alloc_error_handler(layout: core::alloc::Layout) -> ! {
+    panic!(
+        "Error allocating  {} bytes of memory with alignment {}",
+        layout.size(),
+        layout.align()
+    );
+}
+
 #[entry]
 fn main() -> ! {
     let dp = target::Peripherals::take().expect("Failed to obtain Peripherals");
 
-    let (mut dport, dport_clock_control) = dp.DPORT.split();
+    let (_, dport_clock_control) = dp.DPORT.split();
 
     let clkcntrl = ClockControl::new(
         dp.RTCCNTL,
@@ -48,11 +63,10 @@ fn main() -> ! {
         },
         Config {
             // default configuration is 19200 baud, 8 data bits, 1 stop bit & no parity (8N1)
-            baudrate: 115200.Hz(),
+            baudrate: 921600.Hz(),
             ..Config::default()
         },
         clkcntrl_config,
-        &mut dport,
     )
     .unwrap();
 
@@ -81,27 +95,34 @@ fn main() -> ! {
             )
         )
         .unwrap();
-        writeln!(
-            serial,
-            "Wifi set_log_mod result: {:8x}",
-            esp32_wifi::binary::wifi::esp_wifi_internal_set_log_mod(
-                esp32_wifi::binary::wifi::wifi_log_module_t::WIFI_LOG_MODULE_ALL,
-                0,
-                true
-            )
-        )
+
+        writeln!(serial, "WiFi::new:").unwrap();
+
+        let wifi = match esp32_wifi::wifi::WiFi::new(clkcntrl_config) {
+            Ok(wifi) => wifi,
+            Err(err) => panic!("Error starting wifi: {:?}", err),
+        };
+
+        writeln!(serial, "set_mode:").unwrap();
+
+        wifi.set_mode(esp32_wifi::wifi::Mode::WIFI_MODE_STA)
+            .unwrap();
+
+        writeln!(serial, "set_station_config:").unwrap();
+
+        wifi.set_station_config(&mut esp32_wifi::binary::wifi::wifi_sta_config_t {
+            ..Default::default()
+        })
         .unwrap();
 
-        esp32_wifi::wifi::WiFi::new(clkcntrl_config);
+        writeln!(serial, "start:").unwrap();
 
-        // Needed to force inclusion of compatibility module: have not found other way yet.
-        writeln!(
-            serial,
-            "Wifi set_log_mod result: {:?}",
-            esp32_wifi::compatibility::implicit::WIFI_EVENT
-        )
-        .unwrap();
+        wifi.start().unwrap();
+
+        writeln!(serial, "\n\nFinished wifi calls").unwrap();
     }
+
+    writeln!(serial, "\n\nEntering loop...").unwrap();
 
     loop {
         sleep(1.s());
@@ -110,6 +131,17 @@ fn main() -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    dprintln!("\n\n*** {:?}", info);
+    // park the other core
+    unsafe { ClockControlConfig {}.park_core(esp32_hal::get_other_core()) };
+
+    // print panic message
+    dprintln!("\n\n*** Core: {:?} {:?}", esp32_hal::get_core(), info);
+
+    // park this core
+    unsafe { ClockControlConfig {}.park_core(esp32_hal::get_core()) };
+
+    dprintln!("\n\n Should not reached because core is parked!!!");
+
+    // this statement will not be reached, but is needed to make this a diverging function
     loop {}
 }

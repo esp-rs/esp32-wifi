@@ -3,5 +3,5 @@ target = "xtensa-esp32-none-elf"
 
 rustflags = [
   "-C", "link-arg=-nostartfiles",
-  "-C", "link-arg=-Wl,-Tlink.x,wifi.x",
+  "-C", "link-arg=-Wl,-Tlink.x",
 ]

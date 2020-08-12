@@ -1,4 +1,6 @@
-pub fn init_crypto_funcs() -> crate::binary::wifi::wpa_crypto_funcs_t {
+#![allow(unused_variables)]
+
+pub(crate) static mut WPA_CRYPTO_FUNCS: crate::binary::wifi::wpa_crypto_funcs_t =
     crate::binary::wifi::wpa_crypto_funcs_t {
         size: core::mem::size_of::<crate::binary::wifi::wpa_crypto_funcs_t>() as u32,
         version: 0x00000001,
@@ -26,8 +28,7 @@ pub fn init_crypto_funcs() -> crate::binary::wifi::wpa_crypto_funcs_t {
         omac1_aes_128: Some(omac1_aes_128),
         ccmp_decrypt: Some(ccmp_decrypt),
         ccmp_encrypt: Some(ccmp_encrypt),
-    }
-}
+    };
 
 pub unsafe extern "C" fn aes_wrap(
     kek: *const cty::c_uchar,
