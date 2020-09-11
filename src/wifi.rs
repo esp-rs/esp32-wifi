@@ -6,8 +6,9 @@ use crate::wprintln;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-pub struct WiFi {
+pub struct WiFi<'a, 'b> {
     _apb_lock: esp32_hal::clock_control::dfs::LockAPB,
+    timer_factory: &'a mut dyn crate::timer::TimerFactory<'b>,
 }
 
 use crate::binary::wifi::{
@@ -17,7 +18,29 @@ use crate::binary::wifi::{
 pub type Mode = wifi_mode_t;
 
 #[derive(FromPrimitive, Debug)]
+#[allow(non_camel_case_types)]
 pub enum Error {
+    BASE = 0x3000,
+    NOT_INIT,
+    NOT_STARTED,
+    NOT_STOPPED,
+    IF,
+    MODE,
+    STATE,
+    CONN,
+    NVS,
+    MAC,
+    SSID,
+    PASSWORD,
+    TIMEOUT,
+    WAKE_FAIL,
+    WOULD_BLOCK,
+    NOT_CONNECT,
+
+    POST = 0x3000 + 18,
+    INIT_STATE,
+    STOP_STATE,
+
     Unknown,
 }
 
@@ -63,10 +86,31 @@ unsafe extern "C" fn system_event_handler(
     0
 }
 
-impl WiFi {
-    pub fn new(clock_config: esp32_hal::clock_control::ClockControlConfig) -> Result<WiFi, Error> {
+pub(crate) static mut WIFI: Option<WiFi<'_, '_>> = None;
+
+impl<'a, 'b> Drop for WiFi<'a, 'b> {
+    fn drop(&mut self) {
+        self.stop().unwrap();
+        unsafe { WIFI = None };
+    }
+}
+
+impl<'a, 'b> WiFi<'a, 'b> {
+    pub(crate) fn get() -> &'a mut WiFi<'a, 'b> {
+        unsafe { core::mem::transmute::<_, Option<&mut WiFi<'a, 'b>>>(WIFI.as_mut()).unwrap() }
+    }
+
+    pub(crate) fn get_timer_factory() -> &'a mut dyn crate::timer::TimerFactory<'b> {
+        WiFi::get().timer_factory
+    }
+
+    pub fn new(
+        clock_config: esp32_hal::clock_control::ClockControlConfig,
+        timer_factory: &'a mut dyn crate::timer::TimerFactory<'b>,
+    ) -> Result<&'a mut WiFi<'a, 'b>, Error> {
         let wifi = WiFi {
             _apb_lock: clock_config.lock_apb_frequency(),
+            timer_factory: timer_factory,
         };
 
         unsafe {
@@ -93,20 +137,24 @@ impl WiFi {
                 magic: 0x1F2F3F4F,
             };
 
-            // init wifi
-            let res =
-                Error::check_and_return(crate::binary::wifi::esp_wifi_init_internal(&config), wifi);
+            wprintln!("test1");
+            let wifi_static = Some(core::mem::transmute::<_, WiFi<'static, 'static>>(wifi));
+            WIFI = wifi_static;
+            wprintln!("test2");
 
+            if let Some(error) = Error::from(crate::binary::wifi::esp_wifi_init_internal(&config)) {
+                return Err(error);
+            }
             // enable all logging
             if let Some(error) = Error::from(crate::binary::wifi::esp_wifi_internal_set_log_mod(
                 crate::binary::wifi::wifi_log_module_t::WIFI_LOG_MODULE_ALL,
                 0,
                 true,
             )) {
-                Err(error)
-            } else {
-                res
+                return Err(error);
             }
+
+            Ok(core::mem::transmute::<_, Option<&mut WiFi<'a, 'b>>>(WIFI.as_mut()).unwrap())
         }
     }
 
@@ -121,7 +169,35 @@ impl WiFi {
             )
         })
     }
+
     pub fn start(&self) -> Result<(), Error> {
         Error::convert(unsafe { crate::binary::wifi::esp_wifi_start() })
+    }
+
+    pub fn scan(&self) -> Result<u16, Error> {
+        if let Some(error) =
+            Error::from(unsafe { crate::binary::wifi::esp_wifi_scan_start(0 as *const _, true) })
+        {
+            return Err(error);
+        }
+
+        let mut count: u16 = 0;
+        if let Some(error) =
+            Error::from(unsafe { crate::binary::wifi::esp_wifi_scan_get_ap_num(&mut count) })
+        {
+            return Err(error);
+        }
+
+        /*        Error::convert(unsafe {
+            crate::binary::wifi::esp_wifi_scan_get_ap_records(&mut count, true)
+        });*/
+        //        ESP_ERROR_CHECK(esp_wifi_scan_start(NULL, true));
+        //        ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
+        //        ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
+        Ok(count)
+    }
+
+    pub fn stop(&self) -> Result<(), Error> {
+        Error::convert(unsafe { crate::binary::wifi::esp_wifi_stop() })
     }
 }

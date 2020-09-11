@@ -9,11 +9,14 @@ use esp32_hal::{
     clock_control::{sleep, ClockControl, ClockControlConfig, XTAL_FREQUENCY_AUTO},
     dport::Split,
     dprintln,
+    interrupt::Interrupt,
     prelude::*,
     serial::{config::Config, Pins, Serial},
     target,
     timer::Timer,
 };
+
+use esp32_wifi::timer::{TimerFactoryImpl, TimerInterruptHandler};
 
 use esp32_hal::alloc::{Allocator, DEFAULT_ALLOCATOR};
 
@@ -27,6 +30,14 @@ fn alloc_error_handler(layout: core::alloc::Layout) -> ! {
         layout.size(),
         layout.align()
     );
+}
+
+static TIMER_HANDLER: TimerInterruptHandler<Timer<esp32::TIMG0, esp32_hal::timer::TimerLact>> =
+    TimerInterruptHandler::new();
+
+#[interrupt]
+fn TG0_LACT_LEVEL_INTR() {
+    TIMER_HANDLER.handle();
 }
 
 #[entry]
@@ -46,7 +57,7 @@ fn main() -> ! {
     let (clkcntrl_config, mut watchdog) = clkcntrl.freeze().unwrap();
     watchdog.disable();
 
-    let (_, _, _, mut watchdog0) = Timer::new(dp.TIMG0, clkcntrl_config);
+    let (_, _, wifi_timer, mut watchdog0) = Timer::new(dp.TIMG0, clkcntrl_config);
     let (_, _, _, mut watchdog1) = Timer::new(dp.TIMG1, clkcntrl_config);
     watchdog0.disable();
     watchdog1.disable();
@@ -71,6 +82,10 @@ fn main() -> ! {
     .unwrap();
 
     writeln!(serial, "\n\nESP32 Started\n\n").unwrap();
+
+    //   (&TX).lock(|tx| *tx = Some(serial.split().0));
+
+    interrupt::enable(Interrupt::TG0_LACT_LEVEL_INTR).unwrap();
 
     unsafe {
         writeln!(
@@ -98,28 +113,43 @@ fn main() -> ! {
 
         writeln!(serial, "WiFi::new:").unwrap();
 
-        let wifi = match esp32_wifi::wifi::WiFi::new(clkcntrl_config) {
-            Ok(wifi) => wifi,
-            Err(err) => panic!("Error starting wifi: {:?}", err),
-        };
+        {
+            writeln!(serial, "timer_factory pre-created").unwrap();
 
-        writeln!(serial, "set_mode:").unwrap();
+            let mut timer_factory = TimerFactoryImpl::new(wifi_timer);
 
-        wifi.set_mode(esp32_wifi::wifi::Mode::WIFI_MODE_STA)
+            writeln!(serial, "timer_factory created").unwrap();
+
+            TIMER_HANDLER.set_timer_factory(&mut timer_factory);
+
+            writeln!(serial, "set_timer_factory").unwrap();
+
+            let wifi = esp32_wifi::wifi::WiFi::new(clkcntrl_config, &mut timer_factory).unwrap();
+
+            writeln!(serial, "set_mode:").unwrap();
+
+            wifi.set_mode(esp32_wifi::wifi::Mode::WIFI_MODE_STA)
+                .unwrap();
+
+            writeln!(serial, "set_station_config:").unwrap();
+
+            wifi.set_station_config(&mut esp32_wifi::binary::wifi::wifi_sta_config_t {
+                ..Default::default()
+            })
             .unwrap();
 
-        writeln!(serial, "set_station_config:").unwrap();
+            writeln!(serial, "start:").unwrap();
 
-        wifi.set_station_config(&mut esp32_wifi::binary::wifi::wifi_sta_config_t {
-            ..Default::default()
-        })
-        .unwrap();
+            wifi.start().unwrap();
 
-        writeln!(serial, "start:").unwrap();
+            writeln!(serial, "start scan:").unwrap();
 
-        wifi.start().unwrap();
+            let count = wifi.scan().unwrap();
 
-        writeln!(serial, "\n\nFinished wifi calls").unwrap();
+            writeln!(serial, "\n\nAP's found: {}", count).unwrap();
+
+            writeln!(serial, "\n\nFinished wifi calls").unwrap();
+        }
     }
 
     writeln!(serial, "\n\nEntering loop...").unwrap();

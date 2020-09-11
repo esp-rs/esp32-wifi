@@ -14,8 +14,8 @@ unsafe impl Sync for StaticCString {}
 pub static WIFI_EVENT: StaticCString = StaticCString(b"WIFI_EVENT\0" as *const u8);
 
 static mut INTERRUPT_MASK: u32 = 0;
-static mut PHY_SPINLOCK: spin::Mutex<()> = spin::Mutex::new(());
-static mut PHY_SPINLOCK_GUARD: Option<spin::MutexGuard<()>> = None;
+//static mut PHY_SPINLOCK: spin::Mutex<()> = spin::Mutex::new(());
+//static mut PHY_SPINLOCK_GUARD: Option<spin::MutexGuard<()>> = None;
 
 #[no_mangle]
 pub unsafe extern "C" fn phy_enter_critical() -> c_uint {
@@ -97,13 +97,16 @@ pub unsafe extern "C" fn rtc_get_xtal() -> u32 {
 
 #[no_mangle]
 pub unsafe extern "C" fn roundup2(x: c_int, size: c_int) -> c_int {
-    unimplemented!();
+    let res = (x + (size - 1)) & (-size);
+    wprintln!("roundup2({}, {}) -> {}", x, size, res);
+    res
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn __popcountsi2(x: c_int) -> c_uint {
-    wprintln!("__popcountsi2({})", x);
-    x.count_ones()
+    let res = x.count_ones();
+    wprintln!("__popcountsi2({}) -> {}", x, res);
+    res
 }
 
 #[no_mangle]

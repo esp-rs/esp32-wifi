@@ -1,7 +1,8 @@
 #![allow(unused_variables)]
 
 use crate::binary::wifi::__va_list_tag;
-use crate::wprintln;
+use crate::timer::TimerID;
+use crate::{fwprintln, wprintln};
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::raw_vec::RawVec;
@@ -120,6 +121,9 @@ static mut MUTEXES: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<Recur
     CriticalSectionSpinLockMutex::new(BTreeMap::new());
 
 static mut SPINLOCKS: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<SpinLock>>> =
+    CriticalSectionSpinLockMutex::new(BTreeMap::new());
+
+static mut TIMERS: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<Timer>>> =
     CriticalSectionSpinLockMutex::new(BTreeMap::new());
 
 fn alloc(size: usize, internal: bool, zero: bool) -> *mut c_void {
@@ -504,7 +508,6 @@ pub unsafe extern "C" fn _queue_recv(
         block_time_tick,
     );
 
-    //unimplemented!()
     loop {
         let res = (&QUEUES).lock(|queues| {
             let queue = (*queues).get(&queue).unwrap();
@@ -637,7 +640,6 @@ pub unsafe extern "C" fn _task_ms_to_tick(ms: u32) -> i32 {
     let ticks = ms.ms() * esp32_hal::clock_control::ClockControlConfig {}.cpu_frequency();
     wprintln!("_task_ms_to_tick({}) -> {}", ms, ticks);
     (ticks / Ticks(1)) as i32
-    // unimplemented!()
 }
 pub unsafe extern "C" fn _task_get_current_task() -> *mut c_void {
     // unimplemented!()
@@ -863,6 +865,7 @@ pub unsafe extern "C" fn _phy_load_cal_and_init(module: u32) {
         &mut PHY_DEFAULT_CALIBRATION_DATA,
         crate::binary::phy::esp_phy_calibration_mode_t::PHY_RF_CAL_FULL,
     );
+    wprintln!("register_chipv7_phy -> {}", res);
 
     crate::binary::phy::coex_bt_high_prio();
 
@@ -928,55 +931,78 @@ pub unsafe extern "C" fn _read_mac(mac: *mut u8, mac_type: u32) -> i32 {
     );
     TRUE
 }
-pub unsafe extern "C" fn _timer_arm(timer: *mut c_void, tmout: u32, repeat: bool) {
-    wprintln!("_timer_arm({:x}, {}, {})", timer as u32, tmout, repeat);
-    //    unimplemented!()
-}
-pub unsafe extern "C" fn _timer_disarm(timer: *mut c_void) {
-    unimplemented!()
+pub unsafe extern "C" fn _timer_arm(ptimer: *mut c_void, tmout: u32, repeat: bool) {
+    wprintln!("_timer_arm({:x}, {}, {})", ptimer as u32, tmout, repeat);
+
+    (&TIMERS).lock(|timers| {
+        let timer = timers.get_mut(&ptimer).unwrap();
+        timer.id = Some(
+            crate::wifi::WiFi::get_timer_factory().add_single(MilliSeconds(tmout).into(), &**timer),
+        );
+    });
 }
 
-#[repr(C)]
-struct ETSTimer {
-    next: *mut ETSTimer,
-    expire: u32,
-    period: u32,
-    func: extern "C" fn(args: *mut c_void),
-    arg: *mut c_void,
+pub unsafe extern "C" fn _timer_disarm(ptimer: *mut c_void) {
+    wprintln!("_timer_disarm({:x})", ptimer as u32);
+
+    (&TIMERS).lock(|timers| {
+        if let Some(timer) = timers.get_mut(&ptimer) {
+            if let Some(id) = timer.id {
+                crate::wifi::WiFi::get_timer_factory().cancel(id);
+            }
+        }
+    });
 }
 
 pub unsafe extern "C" fn _timer_done(ptimer: *mut c_void) {
-    let etstimer: *mut ETSTimer = ptimer as *mut ETSTimer;
-    wprintln!(
-        "_timer_done({:x?}) {:x} {} {} {:x} {:x}",
-        ptimer,
-        (*etstimer).next as u32,
-        (*etstimer).expire,
-        (*etstimer).period,
-        (*etstimer).func as u32,
-        (*etstimer).arg as u32
-    );
-    //unimplemented!()
+    wprintln!("_timer_done({:x?}) ", ptimer);
+
+    (&TIMERS).lock(|timers| {
+        if let Some(timer) = timers.get_mut(&ptimer) {
+            if let Some(id) = timer.id {
+                crate::wifi::WiFi::get_timer_factory().cancel(id);
+            }
+            timers.remove(&ptimer);
+        }
+    });
 }
+
+struct Timer {
+    id: Option<TimerID>,
+    pfunction: unsafe extern "C" fn(args: *mut c_void),
+    parg: *mut c_void,
+}
+
+impl crate::timer::Callback for Timer {
+    fn handle(&self) {
+        fwprintln!("Timer Callback: {:x}", self.pfunction as u32);
+        unsafe { (self.pfunction)(self.parg) };
+    }
+}
+
 pub unsafe extern "C" fn _timer_setfn(
     ptimer: *mut c_void,
     pfunction: *mut c_void,
     parg: *mut c_void,
 ) {
-    let etstimer: *mut ETSTimer = ptimer as *mut ETSTimer;
-    wprintln!(
-        "_timer_setfn({:x?}, {:x?}, {:x?}) {:x} {} {} {:x} {:x}",
-        ptimer,
-        pfunction,
-        parg,
-        (*etstimer).next as u32,
-        (*etstimer).expire,
-        (*etstimer).period,
-        (*etstimer).func as u32,
-        (*etstimer).arg as u32
-    );
-    //    unimplemented!()
+    (&TIMERS).lock(|timers| {
+        if let Some(timer) = timers.get_mut(&ptimer) {
+            timer.pfunction = core::mem::transmute(pfunction);
+            timer.parg = parg;
+        } else {
+            let timer = Box::new(Timer {
+                id: None,
+                pfunction: core::mem::transmute(pfunction),
+                parg,
+            });
+
+            timers.insert(ptimer, timer);
+        };
+    });
+
+    wprintln!("_timer_setfn({:x?}, {:x?}, {:x?})", ptimer, pfunction, parg);
 }
+
 pub unsafe extern "C" fn _timer_arm_us(ptimer: *mut c_void, us: u32, repeat: bool) {
     unimplemented!()
 }
@@ -1147,7 +1173,6 @@ pub unsafe extern "C" fn _wifi_zalloc(size: usize) -> *mut c_void {
 }
 
 pub unsafe extern "C" fn _wifi_create_queue(queue_len: i32, item_size: i32) -> *mut c_void {
-    //unimplemented!()
     let queue = Box::new(CriticalSectionSpinLockMutex::new(Queue {
         wifi_queue: WifiStaticQueue {
             handle: 0 as *mut c_void,
@@ -1195,7 +1220,9 @@ pub unsafe extern "C" fn _modem_sleep_deregister(module: u32) -> i32 {
     unimplemented!()
 }
 pub unsafe extern "C" fn _coex_status_get() -> u32 {
-    unimplemented!()
+    wprintln!("_coex_status_get()");
+    // unimplemented!()
+    0
 }
 pub unsafe extern "C" fn _coex_condition_set(type_: u32, dissatisfy: bool) {
     unimplemented!()
