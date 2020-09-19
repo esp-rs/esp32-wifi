@@ -32,7 +32,7 @@ fn alloc_error_handler(layout: core::alloc::Layout) -> ! {
     );
 }
 
-static TIMER_HANDLER: TimerInterruptHandler<Timer<esp32::TIMG0, esp32_hal::timer::TimerLact>> =
+static TIMER_HANDLER: TimerInterruptHandler<Timer<esp32_hal::target::TIMG0, esp32_hal::timer::TimerLact>> =
     TimerInterruptHandler::new();
 
 #[interrupt]
