@@ -11,7 +11,7 @@ TOOLS=$(realpath $(dirname $(which xtensa-esp32-elf-gcc))/..)
 TOOL_INCLUDE=$TOOLS/xtensa-esp32-elf/include
 
 BINDGEN_OPTS="--no-layout-tests --use-core --size_t-is-usize --no-prepend-enum-name --ctypes-prefix cty --raw-line #![allow(non_camel_case_types)] --raw-line #![allow(intra_doc_link_resolution_failure)] --default-enum-style rust"
-BINDGEN_CLANG_OPTS="-- -D__GLIBC_USE(x)=0 -DSSIZE_MAX -I ./generate -I $TOOL_INCLUDE -I $BASE/freertos/include $LIBS -I $BASE/lwip/include/apps/sntp/ -I $BASE/lwip/include/apps"
+BINDGEN_CLANG_OPTS="-- -D__GLIBC_USE(x)=0 -DSSIZE_MAX -I ./generate -I $TOOL_INCLUDE -I $BASE/freertos/include $LIBS -I $BASE/lwip/include/apps/sntp/ -I $BASE/lwip/include/apps -I $BASE/wpa_supplicant/src/"
 
 echo "Generating phy.rs"
 bindgen $BASE/esp_wifi/include/phy.h -o src/binary/phy.rs \
@@ -29,4 +29,10 @@ bindgen generate/wifi_wrapper.h  -o src/binary/wifi.rs \
 echo "Generating coexist.rs"
 bindgen generate/coexist_wrapper.h  -o src/binary/coexist.rs \
     --whitelist-function "coex.*" --whitelist-function "esp_coex.*" \
+    $BINDGEN_OPTS $BINDGEN_CLANG_OPTS
+
+echo "Generating wpa.rs"
+bindgen generate/wpa_wrapper.h  -o src/binary/wpa.rs \
+    --with-derive-default \
+    --whitelist-function $WIFI_FUNCTIONS"(.*wifi.*internal.*)" \
     $BINDGEN_OPTS $BINDGEN_CLANG_OPTS

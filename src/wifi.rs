@@ -154,6 +154,11 @@ impl<'a, 'b> WiFi<'a, 'b> {
                 return Err(error);
             }
 
+            // initialize the wpa
+            if let Some(error) = Error::from(crate::binary::wpa::esp_wifi_register_wpa_cb_internal(unsafe { core::mem::uninitialized() })) {
+                return Err(error);
+            }
+
             Ok(core::mem::transmute::<_, Option<&mut WiFi<'a, 'b>>>(WIFI.as_mut()).unwrap())
         }
     }
