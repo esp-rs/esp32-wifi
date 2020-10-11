@@ -14,6 +14,12 @@ The generate/bindgen.sh can be called from the root directory to create the vari
 src/binary. The version of esp-idf used should match the version of the binary blobs in the 
 esp32-wifi-lib sub-repository. (Currently version v4.1 of the esp-idf is used.)
 
+To run the generate/bindgen.sh in Docker:
+```cmd
+docker build -t esp32-wifi-generate -f ./generate/Dockerfile .
+docker run --mount "type=bind,source=$(pwd)/src,target=/esp32-wifi/src/" esp32-wifi-generate
+```
+
 ## License
 
 Licensed under either of
