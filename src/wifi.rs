@@ -2,6 +2,7 @@
 
 use crate::compatibility::crypto::WPA_CRYPTO_FUNCS;
 use crate::compatibility::osi::WIFI_OS_FUNCS;
+use crate::compatibility::wpa::WPA_FUNCS;
 use crate::wprintln;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -155,7 +156,7 @@ impl<'a, 'b> WiFi<'a, 'b> {
             }
 
             // initialize the wpa
-            if let Some(error) = Error::from(crate::binary::wpa::esp_wifi_register_wpa_cb_internal(unsafe { core::mem::uninitialized() })) {
+            if let Some(error) = Error::from(crate::binary::wpa::esp_wifi_register_wpa_cb_internal(&mut WPA_FUNCS)) {
                 return Err(error);
             }
 
