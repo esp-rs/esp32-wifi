@@ -206,14 +206,16 @@ pub(crate) static mut WIFI_OS_FUNCS: crate::binary::wifi::wifi_osi_funcs_t =
         _phy_load_cal_and_init: Some(_phy_load_cal_and_init),
         _phy_common_clock_enable: Some(_phy_common_clock_enable),
         _phy_common_clock_disable: Some(_phy_common_clock_disable),
+        _phy_update_country_info: Some(_phy_update_country_info),
         _read_mac: Some(_read_mac),
         _timer_arm: Some(_timer_arm),
         _timer_disarm: Some(_timer_disarm),
         _timer_done: Some(_timer_done),
         _timer_setfn: Some(_timer_setfn),
         _timer_arm_us: Some(_timer_arm_us),
-        _periph_module_enable: Some(_periph_module_enable),
-        _periph_module_disable: Some(_periph_module_disable),
+        _wifi_reset_mac: Some(_wifi_reset_mac),
+        _wifi_clock_enable: Some(_wifi_clock_enable),
+        _wifi_clock_disable: Some(_wifi_clock_disable),
         _esp_timer_get_time: Some(_esp_timer_get_time),
         _nvs_set_i8: Some(_nvs_set_i8),
         _nvs_get_i8: Some(_nvs_get_i8),
@@ -251,6 +253,7 @@ pub(crate) static mut WIFI_OS_FUNCS: crate::binary::wifi::wifi_osi_funcs_t =
         _coex_condition_set: Some(_coex_condition_set),
         _coex_wifi_request: Some(_coex_wifi_request),
         _coex_wifi_release: Some(_coex_wifi_release),
+        _is_from_isr: Some(_is_from_isr),
         _magic: 0xDEADBEAFu32 as i32,
     };
 
@@ -900,6 +903,10 @@ pub unsafe extern "C" fn _phy_common_clock_disable() {
     });
 }
 
+pub unsafe extern "C" fn _phy_update_country_info(country: *const cty::c_char) -> i32 {
+    unimplemented!();
+}
+
 #[allow(dead_code)]
 enum MACType {
     Station = 0,
@@ -1005,6 +1012,18 @@ pub unsafe extern "C" fn _timer_setfn(
 
 pub unsafe extern "C" fn _timer_arm_us(ptimer: *mut c_void, us: u32, repeat: bool) {
     unimplemented!()
+}
+
+pub unsafe extern "C" fn _wifi_reset_mac() {
+    unimplemented!();
+}
+
+pub unsafe extern "C" fn _wifi_clock_enable() {
+    unimplemented!();
+}
+
+pub unsafe extern "C" fn _wifi_clock_disable() {
+    unimplemented!();
 }
 
 const PERIPHERAL_WIFI: u32 = 27;
@@ -1236,4 +1255,8 @@ pub unsafe extern "C" fn _coex_wifi_release(event: u32) -> i32 {
     wprintln!("_coex_wifi_release({})", event);
     // unimplemented!()
     return 0; // use hardware coexistance
+}
+
+pub unsafe extern "C" fn _is_from_isr() -> bool {
+    unimplemented!();
 }
