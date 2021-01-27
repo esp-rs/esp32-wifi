@@ -156,7 +156,7 @@ fn alloc(size: usize, internal: bool, zero: bool) -> *mut c_void {
 
 pub(crate) static mut WIFI_OS_FUNCS: crate::binary::wifi::wifi_osi_funcs_t =
     crate::binary::wifi::wifi_osi_funcs_t {
-        _version: 0x00000004,
+        _version: 0x00000007,
         _set_isr: Some(_set_isr),
         _ints_on: Some(_ints_on),
         _ints_off: Some(_ints_off),
@@ -206,14 +206,16 @@ pub(crate) static mut WIFI_OS_FUNCS: crate::binary::wifi::wifi_osi_funcs_t =
         _phy_load_cal_and_init: Some(_phy_load_cal_and_init),
         _phy_common_clock_enable: Some(_phy_common_clock_enable),
         _phy_common_clock_disable: Some(_phy_common_clock_disable),
+        _phy_update_country_info: Some(_phy_update_country_info),
         _read_mac: Some(_read_mac),
         _timer_arm: Some(_timer_arm),
         _timer_disarm: Some(_timer_disarm),
         _timer_done: Some(_timer_done),
         _timer_setfn: Some(_timer_setfn),
         _timer_arm_us: Some(_timer_arm_us),
-        _periph_module_enable: Some(_periph_module_enable),
-        _periph_module_disable: Some(_periph_module_disable),
+        _wifi_reset_mac: Some(_wifi_reset_mac),
+        _wifi_clock_enable: Some(_wifi_clock_enable),
+        _wifi_clock_disable: Some(_wifi_clock_disable),
         _esp_timer_get_time: Some(_esp_timer_get_time),
         _nvs_set_i8: Some(_nvs_set_i8),
         _nvs_get_i8: Some(_nvs_get_i8),
@@ -251,6 +253,7 @@ pub(crate) static mut WIFI_OS_FUNCS: crate::binary::wifi::wifi_osi_funcs_t =
         _coex_condition_set: Some(_coex_condition_set),
         _coex_wifi_request: Some(_coex_wifi_request),
         _coex_wifi_release: Some(_coex_wifi_release),
+        _is_from_isr: Some(_is_from_isr),
         _magic: 0xDEADBEAFu32 as i32,
     };
 
@@ -875,14 +878,16 @@ pub unsafe extern "C" fn _phy_load_cal_and_init(module: u32) {
     //unimplemented!()
 }
 
-static mut PHY_COMMON_CLOCK_REF_COUNT: CriticalSectionSpinLockMutex<u32> =
+static mut PHY_COMMON_CLOCK_REF_COUNT: CriticalSectionSpinLockMutex<u8> =
     CriticalSectionSpinLockMutex::new(0);
 
 pub unsafe extern "C" fn _phy_common_clock_enable() {
     wprintln!("_phy_common_clock_enable");
 
     (&PHY_COMMON_CLOCK_REF_COUNT).lock(|count| {
-        esp32_hal::dport::enable_peripheral(esp32_hal::dport::Peripheral::WIFI_BT_COMMON);
+        if *count == 0 {
+            esp32_hal::dport::enable_peripheral(esp32_hal::dport::Peripheral::WIFI_BT_COMMON);
+        }
         *count += 1;
     });
 }
@@ -890,14 +895,17 @@ pub unsafe extern "C" fn _phy_common_clock_disable() {
     wprintln!("_phy_common_clock_disable");
 
     (&PHY_COMMON_CLOCK_REF_COUNT).lock(|count| {
+        *count -= 1;
         if *count == 0 {
-            panic!("_phy_common_clock_disable called more often then _phy_common_clock_enable")
-        } else if *count == 1 {
             esp32_hal::dport::disable_peripheral(esp32_hal::dport::Peripheral::WIFI_BT_COMMON);
         }
-
-        *count -= 1;
     });
+}
+
+pub unsafe extern "C" fn _phy_update_country_info(country: *const cty::c_char) -> i32 {
+    wprintln!("WARNING: phy_update_country_info({}) unimplemented", cstr_core::CStr::from_ptr(country).to_str().unwrap());
+    0
+    //unimplemented!();
 }
 
 #[allow(dead_code)]
@@ -1007,31 +1015,38 @@ pub unsafe extern "C" fn _timer_arm_us(ptimer: *mut c_void, us: u32, repeat: boo
     unimplemented!()
 }
 
-const PERIPHERAL_WIFI: u32 = 27;
-const PERIPHERAL_BT: u32 = 28;
-const PERIPHERAL_WIFI_BT_COMMON: u32 = 29;
-const PERIPHERAL_BT_BASEBAND: u32 = 30;
-const PERIPHERAL_BT_LC: u32 = 31;
+const DPORT_MAC_RST: u32 = 1 << 2;
 
-fn map_to_peripheral(periph: u32) -> esp32_hal::dport::Peripheral {
-    match periph {
-        PERIPHERAL_WIFI => esp32_hal::dport::Peripheral::WIFI,
-        PERIPHERAL_BT => esp32_hal::dport::Peripheral::BT,
-        PERIPHERAL_WIFI_BT_COMMON => esp32_hal::dport::Peripheral::WIFI_BT_COMMON,
-        PERIPHERAL_BT_BASEBAND => esp32_hal::dport::Peripheral::BT_BASEBAND,
-        PERIPHERAL_BT_LC => esp32_hal::dport::Peripheral::BT_LC,
-        _ => unimplemented!(),
-    }
+pub unsafe extern "C" fn _wifi_reset_mac() {
+    wprintln!("wifi_reset_mac()");
+    let dport = &(*esp32::DPORT::ptr());
+    dport.core_rst_en.modify(|r, w| w.bits(r.bits() | DPORT_MAC_RST));
+    dport.core_rst_en.modify(|r, w| w.bits(r.bits() & !DPORT_MAC_RST));
 }
 
-pub unsafe extern "C" fn _periph_module_enable(periph: u32) {
-    wprintln!("_periph_module_enable({})", periph);
-    esp32_hal::dport::enable_peripheral(map_to_peripheral(periph));
+static mut WIFI_CLOCK_REF_COUNT: CriticalSectionSpinLockMutex<u8> =
+    CriticalSectionSpinLockMutex::new(0);
+
+pub unsafe extern "C" fn _wifi_clock_enable() {
+    wprintln!("wifi_clock_enable()");
+    (&WIFI_CLOCK_REF_COUNT).lock(|count| {
+        if *count == 0 {
+            esp32_hal::dport::enable_peripheral(esp32_hal::dport::Peripheral::WIFI);
+        }
+        *count += 1;
+    });
 }
-pub unsafe extern "C" fn _periph_module_disable(periph: u32) {
-    wprintln!("_periph_module_disable({})", periph);
-    esp32_hal::dport::disable_peripheral(map_to_peripheral(periph));
+
+pub unsafe extern "C" fn _wifi_clock_disable() {
+    wprintln!("wifi_clock_disable()");
+    (&WIFI_CLOCK_REF_COUNT).lock(|count| {
+        *count -= 1;
+        if *count == 0 {
+            esp32_hal::dport::disable_peripheral(esp32_hal::dport::Peripheral::WIFI);
+        }
+    });
 }
+
 pub unsafe extern "C" fn _esp_timer_get_time() -> i64 {
     unimplemented!()
 }
@@ -1236,4 +1251,8 @@ pub unsafe extern "C" fn _coex_wifi_release(event: u32) -> i32 {
     wprintln!("_coex_wifi_release({})", event);
     // unimplemented!()
     return 0; // use hardware coexistance
+}
+
+pub unsafe extern "C" fn _is_from_isr() -> bool {
+    unimplemented!();
 }

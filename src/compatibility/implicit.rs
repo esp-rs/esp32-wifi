@@ -52,7 +52,12 @@ unsafe extern "C" fn phy_printf(fmt: *const c_char, ...) -> c_int {
 
 #[no_mangle]
 unsafe extern "C" fn net80211_printf(fmt: *const c_char, ...) -> c_int {
-    unimplemented!();
+    wprintln!(
+        "net80211_printf({})",
+        cstr_core::CStr::from_ptr(fmt).to_str().unwrap()
+    );
+    1
+    //unimplemented!();
 }
 
 #[no_mangle]

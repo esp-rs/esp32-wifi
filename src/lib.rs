@@ -2,7 +2,6 @@
 #![feature(c_variadic)]
 #![feature(raw_vec_internals)]
 #![feature(const_btree_new)]
-#![feature(const_if_match)]
 #![feature(llvm_asm)]
 #![feature(associated_type_bounds)]
 #![feature(const_fn)]
