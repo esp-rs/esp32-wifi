@@ -864,9 +864,14 @@ pub unsafe extern "C" fn _phy_load_cal_and_init(module: u32) {
     //    const esp_phy_init_data_t* init_data = esp_phy_get_init_data();
 
     //    if (ESP_CAL_DATA_CHECK_FAIL ==
+
+    let mut cal_data = PHY_DEFAULT_CALIBRATION_DATA.clone();
+    cal_data.mac = esp32_hal::efuse::Efuse::get_mac_address();
+    wprintln!("MAC is {:?}", cal_data.mac);
+
     let res = crate::binary::phy::register_chipv7_phy(
         &PHY_DEFAULT_INIT_DATA,
-        &mut PHY_DEFAULT_CALIBRATION_DATA,
+        &mut cal_data,
         crate::binary::phy::esp_phy_calibration_mode_t::PHY_RF_CAL_FULL,
     );
     wprintln!("register_chipv7_phy -> {}", res);
