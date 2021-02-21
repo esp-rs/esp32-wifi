@@ -591,12 +591,12 @@ pub unsafe extern "C" fn _event_group_wait_bits(
     unimplemented!()
 }
 
-static mut TASK_FUNC: Option<extern "C" fn(params: *mut c_void)> = None;
+static mut TASK_FUNC: Option<(extern "C" fn(params: *mut c_void), *mut c_void)> = None;
 
 fn cpu1_start() -> ! {
     unsafe {
-        if let Some(func) = TASK_FUNC {
-            func(0 as *mut c_void);
+        if let Some((func, param)) = TASK_FUNC {
+            func(param);
         }
     }
     wprintln!("Wifi Task returned!");
@@ -622,7 +622,7 @@ pub unsafe extern "C" fn _task_create_pinned_to_core(
         task_handle as u32,
         core_id
     );
-    TASK_FUNC = Some(core::mem::transmute(task_func));
+    TASK_FUNC = Some((core::mem::transmute(task_func), param));
     *(task_handle as *mut u32) = 2;
 
     esp32_hal::clock_control::ClockControlConfig {}
