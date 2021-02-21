@@ -900,48 +900,54 @@ const PHY_DEFAULT_INIT_DATA: crate::binary::phy::esp_phy_init_data_t =
         ],
     };
 
+static mut COMMON_CLOCK_DISABLE_TIME: u32 = 0;
+
+static mut PHY_RF_INIT_LOCK: CriticalSectionSpinLockMutex<()> = CriticalSectionSpinLockMutex::new(());
+static mut PHY_RF_EN_TS: i64 = 0;
+
+unsafe fn phy_update_wifi_mac_time(en_clock_stopped: bool, now: i64) {
+    wprintln!("phy_upate_wifi_mac_time({}, {})", en_clock_stopped, now);
+    if en_clock_stopped {
+        COMMON_CLOCK_DISABLE_TIME = now as u32;
+    } else {
+        let diff: u32 = (now as u32) - COMMON_CLOCK_DISABLE_TIME;
+        wprintln!("-> esp_wifi_internal_update_mac_time({})", diff);
+        crate::binary::wifi::esp_wifi_internal_update_mac_time(diff);
+        COMMON_CLOCK_DISABLE_TIME = 0;
+    }
+}
+
+unsafe fn phy_rf_init(init_data: &crate::binary::phy::esp_phy_init_data_t,
+                      mode: crate::binary::phy::esp_phy_calibration_mode_t,
+                      calibration_data: &mut crate::binary::phy::esp_phy_calibration_data_t,
+                      module: u32) -> u32
+{
+    (&PHY_RF_INIT_LOCK).lock(|_| {
+        PHY_RF_EN_TS = _esp_timer_get_time();
+        phy_update_wifi_mac_time(false, PHY_RF_EN_TS);
+
+        _phy_common_clock_enable();
+        crate::binary::phy::phy_set_wifi_mode_only(false);
+
+        // TODO: implement modem sleep
+
+        wprintln!("register_chipv7_phy({:?})", mode);
+        let result = crate::binary::phy::register_chipv7_phy(init_data, calibration_data, mode);
+        wprintln!("register_chipv7_phy() -> {}", result);
+        // TODO implement ESP_CAL_DATA_CHECK_FAIL return
+
+        crate::binary::phy::coex_bt_high_prio();
+        // TODO: implement software coexistence
+    });
+    0
+}
+
 pub unsafe extern "C" fn _phy_load_cal_and_init(module: u32) {
     wprintln!("_phy_load_cal_and_init({})", module);
 
-    /*
-    // TODO: implement timer correction routines
-
-    //  * @param     uint32_t time_delta : time duration since the WiFi/BT common clock is disabled
-    // esp_err_t esp_wifi_internal_update_mac_time( uint32_t time_delta );
-        // Update time stamp
-        s_phy_rf_en_ts = esp_timer_get_time();
-        phy_update_wifi_mac_time(false, s_phy_rf_en_ts);
-
-        */
-
-    _phy_common_clock_enable();
-    crate::binary::phy::phy_set_wifi_mode_only(false);
-
-    // TODO: implement modem sleep
-
-    //esp_phy_calibration_data_t* cal_data =
-    //(esp_phy_calibration_data_t*) calloc(sizeof(esp_phy_calibration_data_t), 1);
-    //    const esp_phy_init_data_t* init_data = esp_phy_get_init_data();
-
-    //    if (ESP_CAL_DATA_CHECK_FAIL ==
-
     let mut cal_data = PHY_DEFAULT_CALIBRATION_DATA.clone();
-    cal_data.mac = esp32_hal::efuse::Efuse::get_mac_address();
-    wprintln!("MAC is {:?}", cal_data.mac);
-
-    let res = crate::binary::phy::register_chipv7_phy(
-        &PHY_DEFAULT_INIT_DATA,
-        &mut cal_data,
-        crate::binary::phy::esp_phy_calibration_mode_t::PHY_RF_CAL_FULL,
-    );
-    wprintln!("register_chipv7_phy -> {}", res);
-
-    crate::binary::phy::coex_bt_high_prio();
-
-    // TODO: implement software coexistence
-    //                         coex_init();    coex_resume();
-
-    //unimplemented!()
+    let init_data = &PHY_DEFAULT_INIT_DATA;
+    phy_rf_init(init_data, crate::binary::phy::esp_phy_calibration_mode_t::PHY_RF_CAL_FULL, &mut cal_data, module);
 }
 
 static mut PHY_COMMON_CLOCK_REF_COUNT: CriticalSectionSpinLockMutex<u8> =
@@ -1120,7 +1126,9 @@ pub unsafe extern "C" fn _wifi_clock_disable() {
 }
 
 pub unsafe extern "C" fn _esp_timer_get_time() -> i64 {
-    unimplemented!()
+    let now = esp32_hal::clock_control::ClockControlConfig{}.rtc_nanoseconds();
+    wprintln!("_esp_timer_get_time() -> {}", now);
+    (now.0 / 1000) as i64
 }
 pub unsafe extern "C" fn _nvs_set_i8(handle: u32, key: *const cty::c_char, value: i8) -> i32 {
     unimplemented!()
