@@ -257,16 +257,59 @@ pub(crate) static mut WIFI_OS_FUNCS: crate::binary::wifi::wifi_osi_funcs_t =
         _magic: 0xDEADBEAFu32 as i32,
     };
 
+static mut WIFI_MAC_INTR_HANDLER: Option<(unsafe extern "C" fn(*mut c_void), *mut c_void)> = None;
+static mut WIFI_MAC_NMI_HANDLER: Option<(unsafe extern "C" fn(*mut c_void), *mut c_void)> = None;
+static mut WIFI_BB_INTR_HANDLER: Option<(unsafe extern "C" fn(*mut c_void), *mut c_void)> = None;
+
+#[interrupt(WIFI_MAC_INTR)]
+unsafe fn wifi_mac_intr() {
+    wprintln!("WIFI_MAC_INTR fired");
+    if let Some((handler, arg)) = WIFI_MAC_INTR_HANDLER {
+        handler(arg);
+    }
+    wprintln!("WIFI_MAC_INTR ISR exiting");
+}
+
+#[interrupt(WIFI_MAC_NMI)]
+unsafe fn wifi_mac_nmi() {
+    wprintln!("WIFI_MAC_NMI fired");
+    if let Some((handler, arg)) = WIFI_MAC_NMI_HANDLER {
+        handler(arg);
+    }
+    wprintln!("WIFI_MAC_NMI ISR exiting");
+}
+
+#[interrupt(WIFI_BB_INTR)]
+unsafe fn wifi_bb_intr() {
+    wprintln!("WIFI_BB_INTR fired");
+    if let Some((handler, arg)) = WIFI_BB_INTR_HANDLER {
+        handler(arg);
+    }
+    wprintln!("WIFI_BB_INTR ISR exiting");
+}
+
 pub unsafe extern "C" fn _set_isr(n: i32, f: *mut c_void, arg: *mut c_void) {
+    use esp32_hal::interrupt::Interrupt;
     wprintln!("_set_isr({}, {:x}, {:x})", n, f as u32, arg as u32);
-    //    unimplemented!()
+
+    let handler = core::mem::transmute::<_, unsafe extern "C" fn(*mut c_void)>(f);
+
+    match Interrupt::try_from(n as u8) {
+        Ok(Interrupt::WIFI_MAC_INTR) => WIFI_MAC_INTR_HANDLER = Some((handler, arg)),
+        Ok(Interrupt::WIFI_MAC_NMI) => WIFI_MAC_NMI_HANDLER = Some((handler, arg)),
+        Ok(Interrupt::WIFI_BB_INTR) => WIFI_BB_INTR_HANDLER = Some((handler, arg)),
+        Ok(_) => wprintln!("WARNING: didn't expect to _set_isr() to be called for interrupt {}", n),
+        Err(_) => wprintln!("WARNING: _set_isr() called with unknown interrupt {}", n),
+    }
+
 }
 pub unsafe extern "C" fn _ints_on(mask: u32) {
-    wprintln!("_ints_on({})", mask);
-    //    unimplemented!()
+    wprintln!("_ints_on({:x})", mask);
+    xtensa_lx6::interrupt::enable_mask(mask);
 }
 pub unsafe extern "C" fn _ints_off(mask: u32) {
-    unimplemented!()
+    wprintln!("_ints_off({:x})", mask);
+    xtensa_lx6::interrupt::disable_mask(mask);
 }
 pub unsafe extern "C" fn _spin_lock_create() -> *mut c_void {
     //    unimplemented!()
@@ -494,7 +537,12 @@ pub unsafe extern "C" fn _queue_send_from_isr(
     item: *mut c_void,
     hptw: *mut c_void,
 ) -> i32 {
-    unimplemented!()
+    wprintln!("WARNING: _queue_send_from_isr() using non-isr variant!");
+    let ret = _queue_send(queue, item, u32::MAX);
+    if !hptw.is_null() {
+        *core::mem::transmute::<_, *mut cty::c_int>(hptw) = 0;
+    }
+    ret
 }
 pub unsafe extern "C" fn _queue_send_to_back(
     queue: *mut c_void,
