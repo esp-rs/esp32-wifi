@@ -449,34 +449,44 @@ pub unsafe extern "C" fn _queue_send(
         block_time_tick,
     );
 
-    (&QUEUES).lock(|queues| {
-        let queue = (*queues).get(&queue).unwrap();
+    let ticks_start = xtensa_lx6::timer::get_cycle_count();
 
-        (&(**queue)).lock(|queue| {
-            if (queue.send_index + queue.count) % queue.count
-                == (queue.receive_index + queue.count - 1) % queue.count
-            {
-                wprintln!("_queue_send -> FALSE");
-                return FALSE;
-            }
-            core::ptr::copy(
-                item,
-                queue
-                    .wifi_queue
-                    .storage
-                    .add(queue.send_index * queue.item_size),
-                queue.item_size,
-            );
-            queue.send_index = (queue.send_index + 1) % queue.count;
-            wprintln!(
-                "_queue_send {:08x} {:08x} {} -> TRUE",
-                *(item as *mut u32),
-                *((item as u32 + 4) as *mut u32),
-                queue.item_size
-            );
-            TRUE
-        })
-    })
+    loop {
+        let res = (&QUEUES).lock(|queues| {
+            let queue = (*queues).get(&queue).unwrap();
+
+            (&(**queue)).lock(|queue| {
+                if (queue.send_index + queue.count) % queue.count
+                    == (queue.receive_index + queue.count - 1) % queue.count
+                {
+                    FALSE
+                } else {
+                    core::ptr::copy(
+                        item,
+                        queue
+                            .wifi_queue
+                            .storage
+                            .add(queue.send_index * queue.item_size),
+                        queue.item_size,
+                    );
+                    queue.send_index = (queue.send_index + 1) % queue.count;
+                    wprintln!(
+                        "_queue_send {:08x} {:08x} {} -> TRUE",
+                        *(item as *mut u32),
+                        *((item as u32 + 4) as *mut u32),
+                        queue.item_size
+                    );
+                    TRUE
+                }
+            })
+        });
+
+        if res == TRUE || xtensa_lx6::timer::get_cycle_count() - ticks_start >= block_time_tick {
+            wprintln!("_queue_send -> {}", res);
+
+            return res;
+        }
+    }
 }
 
 pub unsafe extern "C" fn _queue_send_from_isr(
@@ -512,6 +522,8 @@ pub unsafe extern "C" fn _queue_recv(
         block_time_tick,
     );
 
+    let ticks_start = xtensa_lx6::timer::get_cycle_count();
+
     loop {
         let res = (&QUEUES).lock(|queues| {
             let queue = (*queues).get(&queue).unwrap();
@@ -540,7 +552,7 @@ pub unsafe extern "C" fn _queue_recv(
             })
         });
 
-        if res == TRUE || block_time_tick != u32::MAX {
+        if res == TRUE || xtensa_lx6::timer::get_cycle_count() - ticks_start >= block_time_tick {
             wprintln!("_queue_recv -> {}", res);
 
             return res;
