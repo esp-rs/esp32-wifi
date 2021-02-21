@@ -962,9 +962,15 @@ pub unsafe extern "C" fn _timer_arm(ptimer: *mut c_void, tmout: u32, repeat: boo
 
     (&TIMERS).lock(|timers| {
         let timer = timers.get_mut(&ptimer).unwrap();
-        timer.id = Some(
-            crate::wifi::WiFi::get_timer_factory().add_single(MilliSeconds(tmout).into(), &**timer),
-        );
+        if repeat {
+            timer.id = Some(
+                crate::wifi::WiFi::get_timer_factory().add_periodic(MilliSeconds(tmout).into(), MilliSeconds(tmout).into(), &**timer)
+            );
+        } else {
+            timer.id = Some(
+                crate::wifi::WiFi::get_timer_factory().add_single(MilliSeconds(tmout).into(), &**timer),
+            );
+        }
     });
 }
 
