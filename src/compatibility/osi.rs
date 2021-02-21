@@ -1,6 +1,7 @@
 #![allow(unused_variables)]
 
 use crate::binary::wifi::__va_list_tag;
+use crate::compatibility::spinlock::SpinLock;
 use crate::timer::TimerID;
 use crate::{fwprintln, wprintln};
 use alloc::boxed::Box;
@@ -31,22 +32,6 @@ struct Queue {
 struct WifiStaticQueue {
     handle: *mut c_void,
     storage: *mut c_void,
-}
-
-#[repr(C)]
-struct SpinLock {
-    owner: u32,
-    count: u32,
-}
-const SPINLOCK_FREE: u32 = 0xB33FFFFF;
-
-impl SpinLock {
-    fn new() -> Self {
-        Self {
-            owner: SPINLOCK_FREE,
-            count: 0,
-        }
-    }
 }
 
 struct RecursiveMutex {
@@ -118,9 +103,6 @@ static mut SEMAPHORES: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<Se
     CriticalSectionSpinLockMutex::new(BTreeMap::new());
 
 static mut MUTEXES: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<RecursiveMutex>>> =
-    CriticalSectionSpinLockMutex::new(BTreeMap::new());
-
-static mut SPINLOCKS: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<SpinLock>>> =
     CriticalSectionSpinLockMutex::new(BTreeMap::new());
 
 static mut TIMERS: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<Timer>>> =
@@ -312,19 +294,16 @@ pub unsafe extern "C" fn _ints_off(mask: u32) {
     xtensa_lx6::interrupt::disable_mask(mask);
 }
 pub unsafe extern "C" fn _spin_lock_create() -> *mut c_void {
-    //    unimplemented!()
-    let mut spinlock = Box::new(SpinLock::new());
-    let address = &mut *spinlock as *mut _ as *mut c_void;
-
-    (&SPINLOCKS).lock(|spinlocks| spinlocks.insert(address, spinlock));
+    let spinlock = Box::new(SpinLock::new());
+    let address = Box::leak(spinlock) as *mut _ as *mut c_void;
     wprintln!("_spin_lock_create() -> {:x}", address as u32);
     address
 }
 
 pub unsafe extern "C" fn _spin_lock_delete(lock: *mut c_void) {
     wprintln!("_spin_lock_delete");
-    (&SPINLOCKS).lock(|spinlocks| spinlocks.remove(&lock));
-    // unimplemented!()
+    let spinlock = Box::from_raw(lock as *mut SpinLock);
+    drop(spinlock);
 }
 
 static mut INT_MASK: u32 = 0;
@@ -332,21 +311,27 @@ static mut INT_MASK: u32 = 0;
 pub unsafe extern "C" fn _wifi_int_disable(wifi_int_mux: *mut c_void) -> u32 {
     wprintln!("_wifi_int_disable({:x?})", wifi_int_mux as u32);
 
+    let mut spinlock = Box::from_raw(wifi_int_mux as *mut SpinLock);
+    spinlock.acquire();
+    Box::leak(spinlock);
+
     // disable interrupts and store old mask
     INT_MASK = xtensa_lx6::interrupt::disable();
 
     0
-    //unimplemented!()
 }
 
 pub unsafe extern "C" fn _wifi_int_restore(wifi_int_mux: *mut c_void, tmp: u32) {
     wprintln!("_wifi_int_restore({:x?}, {:x?})", wifi_int_mux as u32, tmp);
 
+    let mut spinlock = Box::from_raw(wifi_int_mux as *mut SpinLock);
+    spinlock.release();
+    Box::leak(spinlock);
+
     // enable previously disable interrupts
     xtensa_lx6::interrupt::enable_mask(INT_MASK);
-
-    //unimplemented!()
 }
+
 pub unsafe extern "C" fn _task_yield_from_isr() {
     unimplemented!()
 }
@@ -364,6 +349,8 @@ fn create_mutex() -> *mut c_void {
 fn create_semaphore(max: u32, init: u32) -> *mut c_void {
     let mut semaphore = Box::new(Semaphore::new(max, init));
     let address = &mut *semaphore as *mut _ as *mut c_void;
+    //let mem: &'static mut Semaphore = Box::leak(semaphore);
+    //return mem as *mut _ as *mut c_void;
 
     unsafe { (&SEMAPHORES).lock(|semaphores| semaphores.insert(address, semaphore)) };
 
