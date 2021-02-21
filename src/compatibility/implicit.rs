@@ -203,10 +203,17 @@ pub unsafe extern "C" fn strlen(cs: *const c_char) -> usize {
 
 #[no_mangle]
 pub unsafe extern "C" fn strncpy(dst: *mut c_char, src: *const c_char, n: usize) -> *mut c_char {
+//    wprintln!(
+//        "strncpy({:x}, {:x}, {}) -> {:x}",
+//        dst as u32,
+//        src as u32,
+//        n,
+//        dst as u32
+//    );
     wprintln!(
-        "strncpy({:x}, {:x}, {}) -> {:x}",
+        "strncpy({:x}, {}, {}) -> {:x}",
         dst as u32,
-        src as u32,
+        cstr_core::CStr::from_ptr(src).to_str().unwrap(),
         n,
         dst as u32
     );
