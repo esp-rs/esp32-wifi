@@ -134,7 +134,23 @@ pub unsafe extern "C" fn gpio_output_set_high(
 pub unsafe extern "C" fn intr_matrix_set(cpu_no: c_int, model_num: c_uint, intr_num: c_uint) {
     wprintln!("intr_matrix_set({},{},{})", cpu_no, model_num, intr_num);
     // TODO: implement routine or refer to ROM
-    //unimplemented!();
+
+    // FIXME: for some reason we end up with livelock before getting to the scan if we use the ROM
+    // func, and interrupts still seem to never get serviced by our handler in osi.rs.
+    //core::mem::transmute::<_, unsafe extern "C" fn(c_int, c_uint, c_uint)>(0x4000681c)(cpu_no, model_num, intr_num);
+
+    // This allows forward progress, interrupts are fired and handled by our routine, and the scan
+    // completes (still with 0 APs), but then we get InstrProhibited after a little bit (I _think_
+    // something somewhere tries to dereference a NULL ptr).
+    let core = match cpu_no {
+        0 => esp32_hal::Core::PRO,
+        1 => esp32_hal::Core::APP,
+        other => panic!("Unknown CPU core ID"),
+    };
+    let interrupt = esp32_hal::interrupt::Interrupt::try_from(model_num as u8).expect("Unknown interrupt number");
+    if let Err(err) = esp32_hal::interrupt::enable_with_priority(core, interrupt, esp32_hal::interrupt::InterruptLevel(1)) {
+        wprintln!("ERROR: Failed to enable map interrupt {}", model_num);
+    }
 }
 
 #[no_mangle]
