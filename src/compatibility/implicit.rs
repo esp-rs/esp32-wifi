@@ -1,7 +1,8 @@
 #![allow(unused_variables)]
 
 use crate::wprintln;
-use crate::compatibility::spinlock::ReentrantSpinLock;
+use crate::compatibility::spinlock::SpinLock;
+use crate::compatibility::interrupts::InterruptManager;
 use cty::{c_char, c_int, c_uint, c_void};
 use esp32_hal::units::*;
 
@@ -14,16 +15,13 @@ unsafe impl Sync for StaticCString {}
 #[no_mangle]
 pub static WIFI_EVENT: StaticCString = StaticCString(b"WIFI_EVENT\0" as *const u8);
 
-static mut INTERRUPT_MASK: u32 = 0;
-static mut PHY_SPINLOCK: ReentrantSpinLock = ReentrantSpinLock::new();
+static mut PHY_SPINLOCK: SpinLock = SpinLock::new();
 
 #[no_mangle]
 pub unsafe extern "C" fn phy_enter_critical() -> c_uint {
     wprintln!("phy_enter_critical()");
 
-    if !PHY_SPINLOCK.lock() {
-        INTERRUPT_MASK = xtensa_lx6::interrupt::disable();
-    }
+    InterruptManager::run(|mgr| mgr.enter_critical(&mut PHY_SPINLOCK));
     0
 }
 
@@ -31,9 +29,7 @@ pub unsafe extern "C" fn phy_enter_critical() -> c_uint {
 pub unsafe extern "C" fn phy_exit_critical(_level: c_uint) {
     wprintln!("phy_exit_critical({})", _level);
 
-    PHY_SPINLOCK.unlock(||
-        xtensa_lx6::interrupt::enable_mask(INTERRUPT_MASK)
-    );
+    InterruptManager::run(|mgr| mgr.exit_critical(&mut PHY_SPINLOCK));
 }
 
 #[no_mangle]

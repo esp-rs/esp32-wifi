@@ -1,5 +1,6 @@
+use alloc::boxed::Box;
 use core::hint::spin_loop;
-use spin::Mutex;
+use crate::compatibility::interrupts::InterruptManager;
 
 /// 'owner' value that indicates the spinlock is unheld
 const SPINLOCK_FREE: u32 = 0xB33FFFFF;
@@ -20,9 +21,16 @@ impl SpinLock {
         }
     }
 
+    pub unsafe fn use_raw<T>(address: *mut cty::c_void, f: impl FnOnce(&mut SpinLock) -> T) -> T {
+        let mut spinlock = Box::from_raw(address as *mut SpinLock);
+        let res = f(&mut spinlock);
+        Box::leak(spinlock);
+        res
+    }
+
     pub fn try_acquire(&mut self) -> bool {
         let mut result = esp32_hal::get_core() as u32;
-        let int_mask = xtensa_lx6::interrupt::disable();
+        let old_intr_level = InterruptManager::set_intlevel_excm();
         // SAFETY: low-level compare-and-set operation using known-correct pointers to active memory
         unsafe { _compare_and_set(&mut self.owner, SPINLOCK_FREE, &mut result) };
         let acquired = if result == SPINLOCK_FREE || result == esp32_hal::get_core() as u32 {
@@ -31,8 +39,7 @@ impl SpinLock {
         } else {
             false
         };
-        // SAFETY: restoring previously-set interrupt mask
-        unsafe { xtensa_lx6::interrupt::set_mask(int_mask) };
+        InterruptManager::restore_intlevel(old_intr_level);
         acquired
     }
 
@@ -43,7 +50,7 @@ impl SpinLock {
     }
 
     pub fn release(&mut self) {
-        let int_mask = xtensa_lx6::interrupt::disable();
+        let old_intr_level = InterruptManager::set_intlevel_excm();
         if self.owner != esp32_hal::get_core() as u32 {
             panic!("Attempt to release un-acquired spinlock");
         }
@@ -51,8 +58,7 @@ impl SpinLock {
         if self.count == 0 {
             self.owner = SPINLOCK_FREE;
         }
-        // SAFETY: restoring previously-set interrupt mask
-        unsafe { xtensa_lx6::interrupt::set_mask(int_mask) };
+        InterruptManager::restore_intlevel(old_intr_level);
     }
 }
 

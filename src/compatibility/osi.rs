@@ -1,6 +1,7 @@
 #![allow(unused_variables)]
 
 use crate::binary::wifi::__va_list_tag;
+use crate::compatibility::interrupts::InterruptManager;
 use crate::compatibility::spinlock::SpinLock;
 use crate::timer::TimerID;
 use crate::{fwprintln, wprintln};
@@ -306,30 +307,21 @@ pub unsafe extern "C" fn _spin_lock_delete(lock: *mut c_void) {
     drop(spinlock);
 }
 
-static mut INT_MASK: u32 = 0;
-
 pub unsafe extern "C" fn _wifi_int_disable(wifi_int_mux: *mut c_void) -> u32 {
     wprintln!("_wifi_int_disable({:x?})", wifi_int_mux as u32);
 
-    let mut spinlock = Box::from_raw(wifi_int_mux as *mut SpinLock);
-    spinlock.acquire();
-    Box::leak(spinlock);
-
-    // disable interrupts and store old mask
-    INT_MASK = xtensa_lx6::interrupt::disable();
-
+    SpinLock::use_raw(wifi_int_mux, |ref mut spinlock|
+        InterruptManager::run(|mgr| mgr.enter_critical(spinlock))
+    );
     0
 }
 
 pub unsafe extern "C" fn _wifi_int_restore(wifi_int_mux: *mut c_void, tmp: u32) {
     wprintln!("_wifi_int_restore({:x?}, {:x?})", wifi_int_mux as u32, tmp);
 
-    let mut spinlock = Box::from_raw(wifi_int_mux as *mut SpinLock);
-    spinlock.release();
-    Box::leak(spinlock);
-
-    // enable previously disable interrupts
-    xtensa_lx6::interrupt::enable_mask(INT_MASK);
+    SpinLock::use_raw(wifi_int_mux, |ref mut spinlock|
+        InterruptManager::run(|mgr| mgr.exit_critical(spinlock))
+    );
 }
 
 pub unsafe extern "C" fn _task_yield_from_isr() {
