@@ -75,8 +75,8 @@ unsafe extern "C" fn system_event_handler(
     ticks_to_wait: TickType_t,
 ) -> esp_err_t {
     wprintln!(
-        "system_event_handler({:x}, {}, {:x}, {}, {})",
-        event_base as u32,
+        "system_event_handler({}, {}, {:x}, {}, {})",
+        cstr_core::CStr::from_ptr(event_base).to_str().unwrap(),
         event_id,
         event_data as u32,
         event_data_size,
