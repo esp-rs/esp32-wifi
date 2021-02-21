@@ -140,8 +140,8 @@ pub unsafe extern "C" fn intr_matrix_set(cpu_no: c_int, model_num: c_uint, intr_
 #[no_mangle]
 pub unsafe extern "C" fn ets_delay_us(us: c_uint) {
     wprintln!("ets_delay_us({})", us);
-    //  let ticks = us.us() * esp32_hal::clock_control::ClockControlConfig {}.cpu_frequency();
-    //  xtensa_lx6::timer::delay(ticks / Ticks(1));
+    let ticks = us.us() * esp32_hal::clock_control::ClockControlConfig {}.cpu_frequency();
+    xtensa_lx6::timer::delay(ticks / Ticks(1));
 }
 
 #[no_mangle]
