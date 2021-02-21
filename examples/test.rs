@@ -144,7 +144,9 @@ fn main() -> ! {
 
             writeln!(serial, "start scan:").unwrap();
 
+            let start_ns = clkcntrl_config.rtc_nanoseconds();
             let count = wifi.scan().unwrap();
+            writeln!(serial, "scan took {}", clkcntrl_config.rtc_nanoseconds() - start_ns).unwrap();
 
             writeln!(serial, "\n\nAP's found: {}", count).unwrap();
 
