@@ -21,6 +21,6 @@ macro_rules! fwprintln {
 #[macro_export]
 macro_rules! wprintln {
     ($($arg:tt)*) => {
-        // crate::fwprintln!($($arg)*);
+        crate::fwprintln!($($arg)*);
     };
 }
