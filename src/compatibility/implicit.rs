@@ -162,17 +162,31 @@ pub unsafe extern "C" fn phy_get_romfuncs() -> *const c_void {
 pub unsafe extern "C" fn strnlen(cs: *const c_char, maxlen: usize) -> usize {
     wprintln!("strnlen({:x}, {})", cs as u32, maxlen);
 
-    for i in 0..maxlen {
-        if *cs.add(i) == 0 {
-            return i;
+    if cs.is_null() {
+        0
+    } else {
+        for i in 0..maxlen {
+            if *cs.add(i) == 0 {
+                return i;
+            }
         }
+        maxlen
     }
-    return maxlen;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn strlen(cs: *const c_char) -> usize {
-    unimplemented!();
+    wprintln!("strlen({:x})", cs as u32);
+
+    if cs.is_null() {
+        0
+    } else {
+        let mut len: usize = 0;
+        while *cs.add(len) != 0 {
+            len += 1;
+        }
+        len
+    }
 }
 
 #[no_mangle]
@@ -210,7 +224,19 @@ pub unsafe extern "C" fn abort() -> ! {
 
 #[no_mangle]
 pub unsafe extern "C" fn strncmp(cs: *const c_char, ct: *const c_char, n: usize) -> c_int {
-    unimplemented!();
+    for i in 0..n {
+        let a = *cs.add(i);
+        let b = *ct.add(i);
+
+        if a < b {
+            return -1;
+        } else if a > b {
+            return 1;
+        } else if a == 0 {
+            return 0;
+        }
+    }
+    0
 }
 
 #[no_mangle]

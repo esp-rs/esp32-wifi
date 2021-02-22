@@ -280,6 +280,7 @@ pub unsafe extern "C" fn _spin_lock_create() -> *mut c_void {
 
 pub unsafe extern "C" fn _spin_lock_delete(lock: *mut c_void) {
     wprintln!("_spin_lock_delete");
+    (&SPINLOCKS).lock(|spinlocks| spinlocks.remove(&lock));
     // unimplemented!()
 }
 
