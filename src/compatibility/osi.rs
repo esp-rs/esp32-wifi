@@ -21,18 +21,26 @@ const FALSE: i32 = 0;
 const PASS: i32 = TRUE;
 const ESP_OK: i32 = 0;
 
+#[repr(C)]
 struct Queue {
-    wifi_queue: WifiStaticQueue,
+    handle: *mut c_void,
+    storage: *mut c_void,
     item_size: usize,
     count: usize,
     send_index: usize,
     receive_index: usize,
+    lock: SpinLock,
 }
 
-#[repr(C)]
-struct WifiStaticQueue {
-    handle: *mut c_void,
-    storage: *mut c_void,
+impl Queue {
+    pub unsafe fn use_raw<T>(address: *mut cty::c_void, f: impl FnOnce(&mut Queue) -> T) -> T {
+        let mut queue = Box::from_raw(address as *mut Queue);
+        queue.lock.acquire();
+        let res = f(&mut queue);
+        queue.lock.release();
+        Box::leak(queue);
+        res
+    }
 }
 
 struct RecursiveMutex {
@@ -95,10 +103,6 @@ impl Semaphore {
         })
     }
 }
-
-static mut QUEUES: CriticalSectionSpinLockMutex<
-    BTreeMap<*mut c_void, Box<CriticalSectionSpinLockMutex<Queue>>>,
-> = CriticalSectionSpinLockMutex::new(BTreeMap::new());
 
 static mut SEMAPHORES: CriticalSectionSpinLockMutex<BTreeMap<*mut c_void, Box<Semaphore>>> =
     CriticalSectionSpinLockMutex::new(BTreeMap::new());
@@ -453,12 +457,18 @@ pub unsafe extern "C" fn _mutex_unlock(mutex: *mut c_void) -> i32 {
     });
     TRUE
 }
+
 pub unsafe extern "C" fn _queue_create(queue_len: u32, item_size: u32) -> *mut c_void {
-    unimplemented!()
+    wprintln!("_queue_create({}, {})", queue_len, item_size);
+    _wifi_create_queue(queue_len as i32, item_size as i32)
 }
+
 pub unsafe extern "C" fn _queue_delete(queue: *mut c_void) {
-    unimplemented!()
+    wprintln!("_queue_delete({:x?})", queue);
+    let queue = Box::from_raw(queue as *mut Queue);
+    drop(queue);
 }
+
 pub unsafe extern "C" fn _queue_send(
     queue: *mut c_void,
     item: *mut c_void,
@@ -474,38 +484,32 @@ pub unsafe extern "C" fn _queue_send(
     let ticks_start = xtensa_lx6::timer::get_cycle_count();
 
     loop {
-        let res = (&QUEUES).lock(|queues| {
-            let queue = (*queues).get(&queue).unwrap();
-
-            (&(**queue)).lock(|queue| {
-                if (queue.send_index + queue.count) % queue.count
-                    == (queue.receive_index + queue.count - 1) % queue.count
-                {
-                    FALSE
-                } else {
-                    core::ptr::copy(
-                        item,
-                        queue
-                            .wifi_queue
-                            .storage
-                            .add(queue.send_index * queue.item_size),
-                        queue.item_size,
-                    );
-                    queue.send_index = (queue.send_index + 1) % queue.count;
-                    wprintln!(
-                        "_queue_send {:08x} {:08x} {} -> TRUE",
-                        *(item as *mut u32),
-                        *((item as u32 + 4) as *mut u32),
-                        queue.item_size
-                    );
-                    TRUE
-                }
-            })
+        let res = Queue::use_raw(queue, |queue| {
+            if (queue.send_index + queue.count) % queue.count
+                == (queue.receive_index + queue.count - 1) % queue.count
+            {
+                FALSE
+            } else {
+                core::ptr::copy(
+                    item,
+                    queue
+                        .storage
+                        .add(queue.send_index * queue.item_size),
+                    queue.item_size,
+                );
+                queue.send_index = (queue.send_index + 1) % queue.count;
+                wprintln!(
+                    "_queue_send {:08x} {:08x} {} -> TRUE",
+                    *(item as *mut u32),
+                    *((item as u32 + 4) as *mut u32),
+                    queue.item_size
+                );
+                TRUE
+            }
         });
 
         if res == TRUE || xtensa_lx6::timer::get_cycle_count() - ticks_start >= block_time_tick {
             wprintln!("_queue_send -> {}", res);
-
             return res;
         }
     }
@@ -552,49 +556,37 @@ pub unsafe extern "C" fn _queue_recv(
     let ticks_start = xtensa_lx6::timer::get_cycle_count();
 
     loop {
-        let res = (&QUEUES).lock(|queues| {
-            let queue = (*queues).get(&queue).unwrap();
-
-            (&(**queue)).lock(|queue| {
-                if queue.send_index == queue.receive_index {
-                    FALSE
-                } else {
-                    core::ptr::copy(
-                        queue
-                            .wifi_queue
-                            .storage
-                            .add(queue.receive_index * queue.item_size),
-                        item,
-                        queue.item_size,
-                    );
-                    queue.receive_index = (queue.receive_index + 1) % queue.count;
-                    wprintln!(
-                        "_queue_recv {:08x} {:08x} {} -> TRUE",
-                        *(item as *mut u32),
-                        *((item as u32 + 4) as *mut u32),
-                        queue.item_size
-                    );
-                    TRUE
-                }
-            })
+        let res = Queue::use_raw(queue, |queue| {
+            if queue.send_index == queue.receive_index {
+                FALSE
+            } else {
+                core::ptr::copy(
+                    queue
+                        .storage
+                        .add(queue.receive_index * queue.item_size),
+                    item,
+                    queue.item_size,
+                );
+                queue.receive_index = (queue.receive_index + 1) % queue.count;
+                wprintln!(
+                    "_queue_recv {:08x} {:08x} {} -> TRUE",
+                    *(item as *mut u32),
+                    *((item as u32 + 4) as *mut u32),
+                    queue.item_size
+                );
+                TRUE
+            }
         });
 
         if res == TRUE || xtensa_lx6::timer::get_cycle_count() - ticks_start >= block_time_tick {
             wprintln!("_queue_recv -> {}", res);
-
             return res;
         }
     }
 }
 pub unsafe extern "C" fn _queue_msg_waiting(queue: *mut c_void) -> u32 {
     wprintln!("_queue_msg_waiting({:x?})", queue,);
-
-    (&QUEUES).lock(|queues| {
-        let queue = (*queues).get(&queue).unwrap();
-
-        (&(**queue))
-            .lock(|queue| (queue.send_index + queue.count - queue.receive_index) % queue.count)
-    }) as u32
+    Queue::use_raw(queue, |queue| (queue.send_index + queue.count - queue.receive_index) % queue.count) as u32
 }
 pub unsafe extern "C" fn _event_group_create() -> *mut c_void {
     unimplemented!()
@@ -1247,23 +1239,17 @@ pub unsafe extern "C" fn _wifi_zalloc(size: usize) -> *mut c_void {
 }
 
 pub unsafe extern "C" fn _wifi_create_queue(queue_len: i32, item_size: i32) -> *mut c_void {
-    let queue = Box::new(CriticalSectionSpinLockMutex::new(Queue {
-        wifi_queue: WifiStaticQueue {
-            handle: 0 as *mut c_void,
-            storage: alloc(queue_len as usize * item_size as usize, true, true),
-        },
+    let mut queue = Box::new(Queue {
+        handle: 0 as *mut c_void,
+        storage: alloc(queue_len as usize * item_size as usize, true, true),
         count: queue_len as usize,
         item_size: item_size as usize,
         send_index: 0,
         receive_index: 0,
-    }));
-    let address = (&*queue).lock(|queue| {
-        let address = &mut (*queue).wifi_queue as *mut _ as *mut c_void;
-        (*queue).wifi_queue.handle = address;
-        address
+        lock: SpinLock::new(),
     });
-    (&QUEUES).lock(|queues| queues.insert(address, queue));
-
+    queue.handle = &mut (*queue) as *mut _ as *mut c_void;
+    let address = Box::leak(queue) as *mut _ as *mut c_void;
     wprintln!(
         "_wifi_create_queue({}, {}) -> {:x?}",
         queue_len,
@@ -1274,7 +1260,8 @@ pub unsafe extern "C" fn _wifi_create_queue(queue_len: i32, item_size: i32) -> *
 }
 pub unsafe extern "C" fn _wifi_delete_queue(queue: *mut c_void) {
     wprintln!("_wifi_delete_queue({:x?})", queue as u32);
-    //unimplemented!()
+    let queue = Box::from_raw(queue as *mut Queue);
+    drop(queue);
 }
 
 pub unsafe extern "C" fn _modem_sleep_enter(module: u32) -> i32 {
