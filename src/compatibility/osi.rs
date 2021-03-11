@@ -373,26 +373,17 @@ pub unsafe extern "C" fn _semphr_delete(semphr: *mut c_void) {
 pub unsafe extern "C" fn _semphr_take(semphr: *mut c_void, block_time_tick: u32) -> i32 {
     wprintln!("_semphr_take({:x?}, {})", semphr as u32, block_time_tick);
 
-    if block_time_tick == 0 {
-        (&SEMAPHORES).lock(|semaphores| {
-            let semaphore = semaphores.get(&semphr).unwrap();
-            if semaphore.take() {
-                wprintln!("_semphr_take -> {}", TRUE);
-                return TRUE;
-            } else {
-                wprintln!("_semphr_take -> {}", FALSE);
-                return FALSE;
-            }
-        });
-    };
+    let ticks_start = xtensa_lx6::timer::get_cycle_count();
 
     loop {
-        if (&SEMAPHORES).lock(|semaphores| {
+        let res = (&SEMAPHORES).lock(|semaphores| {
             let semaphore = semaphores.get(&semphr).unwrap();
             semaphore.take()
-        }) {
-            wprintln!("_semphr_take -> {}", TRUE);
-            return TRUE;
+        });
+
+        if res || xtensa_lx6::timer::get_cycle_count() - ticks_start >= block_time_tick {
+            wprintln!("_semphr_take({:x?}, {}) -> {}", semphr as u32, block_time_tick, res);
+            return if res { TRUE } else { FALSE };
         }
     }
 }
