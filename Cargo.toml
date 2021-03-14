@@ -17,3 +17,6 @@ num-traits = { version="0.2", default-features = false }
 spin = "0.5.2"
 embedded-hal = { version = "0.2.3", features = ["unproven"] }
 nb = "0.1.2"
+
+[build-dependencies]
+cc = { version = "1.0", features = [ "parallel" ] }

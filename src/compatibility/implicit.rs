@@ -32,25 +32,25 @@ pub unsafe extern "C" fn phy_exit_critical(_level: c_uint) {
     InterruptManager::run(|mgr| mgr.exit_critical(&mut PHY_SPINLOCK));
 }
 
-#[no_mangle]
-unsafe extern "C" fn phy_printf(fmt: *const c_char, ...) -> c_int {
-    wprintln!(
-        "phy_printf({})",
-        cstr_core::CStr::from_ptr(fmt).to_str().unwrap()
-    );
-    1
-    //    unimplemented!();
-}
+//#[no_mangle]
+//unsafe extern "C" fn phy_printf(fmt: *const c_char, ...) -> c_int {
+//    wprintln!(
+//        "phy_printf({})",
+//        cstr_core::CStr::from_ptr(fmt).to_str().unwrap()
+//    );
+//    1
+//    //    unimplemented!();
+//}
 
-#[no_mangle]
-unsafe extern "C" fn net80211_printf(fmt: *const c_char, ...) -> c_int {
-    wprintln!(
-        "net80211_printf({})",
-        cstr_core::CStr::from_ptr(fmt).to_str().unwrap()
-    );
-    1
-    //unimplemented!();
-}
+//#[no_mangle]
+//unsafe extern "C" fn net80211_printf(fmt: *const c_char, ...) -> c_int {
+//    wprintln!(
+//        "net80211_printf({})",
+//        cstr_core::CStr::from_ptr(fmt).to_str().unwrap()
+//    );
+//    1
+//    //unimplemented!();
+//}
 
 #[no_mangle]
 unsafe extern "C" fn hexstr2bin(hex: *const c_char, buf: *const u8, len: usize) -> c_int {
@@ -254,22 +254,29 @@ pub unsafe extern "C" fn strncmp(cs: *const c_char, ct: *const c_char, n: usize)
     0
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn sprintf(s: *mut c_char, format: *const c_char, ...) -> c_int {
-    wprintln!(
-        "sprintf({:x}, {})",
-        s as u32,
-        cstr_core::CStr::from_ptr(format).to_str().unwrap()
-    );
-
-    //unimplemented!();
-    let str = [0x44i8, 0x4d, 0x59, 0];
-    strncpy(s, str.as_ptr(), 4);
-    3
-}
+//#[no_mangle]
+//pub unsafe extern "C" fn sprintf(s: *mut c_char, format: *const c_char, mut args: ...) -> c_int {
+//    wprintln!(
+//        "sprintf({:x}, {})",
+//        s as u32,
+//        cstr_core::CStr::from_ptr(format).to_str().unwrap()
+//    );
+//
+//    //unimplemented!();
+//    let str = [0x44i8, 0x4d, 0x59, 0];
+//    strncpy(s, str.as_ptr(), 4);
+//    3
+//}
 
 #[no_mangle]
 pub unsafe extern "C" fn puts(a: *const c_char) -> c_int {
     wprintln!("{}", cstr_core::CStr::from_ptr(a).to_str().unwrap());
     true as c_int
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn _print(s: *const c_char) -> c_int {
+    let s = cstr_core::CStr::from_ptr(s).to_str().unwrap();
+    esp32_hal::dprint!("{}", s);
+    s.len() as c_int
 }

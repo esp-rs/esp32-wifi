@@ -1163,36 +1163,43 @@ pub unsafe extern "C" fn _get_time(t: *mut c_void) -> i32 {
 pub unsafe extern "C" fn _random() -> cty::c_ulong {
     unimplemented!()
 }
-pub unsafe extern "C" fn _log_write(
-    level: u32,
-    tag: *const cty::c_char,
-    format: *const cty::c_char,
-    mut args: ...
-) {
-    let a: u32 = args.arg();
-    wprintln!(
-        "_log_write({}, {}, {}, {:x?})",
-        level,
-        cstr_core::CStr::from_ptr(tag).to_str().unwrap(),
-        cstr_core::CStr::from_ptr(format).to_str().unwrap(),
-        a
-    );
-    // unimplemented!()
+
+extern "C" {
+    pub fn _log_write(level: u32, tag: *const cty::c_char, format: *const cty::c_char, ...);
+    pub fn _log_writev(level: u32, tag: *const cty::c_char, format: *const cty::c_char, args: *mut __va_list_tag);
 }
-pub unsafe extern "C" fn _log_writev(
-    level: u32,
-    tag: *const cty::c_char,
-    format: *const cty::c_char,
-    args: *mut __va_list_tag,
-) {
-    wprintln!(
-        "_log_writev({}, {}, {}, ...)",
-        level,
-        cstr_core::CStr::from_ptr(tag).to_str().unwrap(),
-        cstr_core::CStr::from_ptr(format).to_str().unwrap(),
-    );
-    //    unimplemented!()
-}
+
+
+//pub unsafe extern "C" fn _log_write(
+//    level: u32,
+//    tag: *const cty::c_char,
+//    format: *const cty::c_char,
+//    mut args: ...
+//) {
+//    let a: u32 = args.arg();
+//    wprintln!(
+//        "_log_write({}, {}, {}, {:x?})",
+//        level,
+//        cstr_core::CStr::from_ptr(tag).to_str().unwrap(),
+//        cstr_core::CStr::from_ptr(format).to_str().unwrap(),
+//        a
+//    );
+//    // unimplemented!()
+//}
+//pub unsafe extern "C" fn _log_writev(
+//    level: u32,
+//    tag: *const cty::c_char,
+//    format: *const cty::c_char,
+//    args: *mut __va_list_tag,
+//) {
+//    wprintln!(
+//        "_log_writev({}, {}, {}, ...)",
+//        level,
+//        cstr_core::CStr::from_ptr(tag).to_str().unwrap(),
+//        cstr_core::CStr::from_ptr(format).to_str().unwrap(),
+//    );
+//    //    unimplemented!()
+//}
 pub unsafe extern "C" fn _log_timestamp() -> u32 {
     // unimplemented!()
     1
