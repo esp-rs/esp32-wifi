@@ -1,18 +1,22 @@
 /// Macro for logging WIFI info.
 ///
-use xtensa_lx6::mutex::CriticalSectionSpinLockMutex;
+use crate::compatibility::spinlock::SpinLock;
 
-pub static LOCK: CriticalSectionSpinLockMutex<()> = CriticalSectionSpinLockMutex::new(());
+pub static mut LOCK: SpinLock = SpinLock::new();
 
 #[macro_export]
 macro_rules! fwprintln {
     ($($arg:tt)*) => {
         {
             use esp32_hal::{dprint, dprintln};
-            use xtensa_lx6::mutex::mutex_trait::Mutex;
-            (&crate::log::LOCK).lock(|_| {
+            use crate::compatibility::interrupts::InterruptManager;
+            InterruptManager::run(|mgr| {
+                #[allow(unused_unsafe)]
+                unsafe { mgr.enter_critical(&mut crate::log::LOCK) };
                 dprint!("WIFI core {:?}: ",esp32_hal::get_core());
                 dprintln!($($arg)*);
+                #[allow(unused_unsafe)]
+                unsafe { mgr.exit_critical(&mut crate::log::LOCK) };
             });
         }
     };
