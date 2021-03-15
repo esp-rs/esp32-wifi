@@ -4,10 +4,11 @@ use crate::binary::wifi::__va_list_tag;
 use crate::compatibility::interrupts::InterruptManager;
 use crate::compatibility::spinlock::SpinLock;
 use crate::timer::TimerID;
-use crate::{wdprintln, wtprintln, wwprintln};
+use crate::{wdprintln, weprintln, wtprintln, wwprintln};
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use alloc::raw_vec::RawVec;
+use core::convert::TryFrom;
 use cty::c_void;
 use esp32_hal::alloc::{Allocator, DEFAULT_ALLOCATOR, DRAM_ALLOCATOR};
 use esp32_hal::prelude::*;
@@ -20,6 +21,7 @@ const FALSE: i32 = 0;
 
 const PASS: i32 = TRUE;
 const ESP_OK: i32 = 0;
+const ESP_ERR_INVALID_ARG: i32 = 0x102;
 
 #[repr(C)]
 struct Queue {
@@ -945,6 +947,7 @@ pub unsafe extern "C" fn _phy_update_country_info(country: *const cty::c_char) -
 }
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
 enum MACType {
     Station = 0,
     AccessPoint = 1,
@@ -952,28 +955,48 @@ enum MACType {
     Ethernet = 3,
 }
 
+impl TryFrom<u32> for MACType {
+    type Error = &'static str;
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
+        match v {
+            0 => Ok(MACType::Station),
+            1 => Ok(MACType::AccessPoint),
+            2 => Ok(MACType::Bluetooth),
+            4 => Ok(MACType::Ethernet),
+            _ => Err("Invalid MAC type"),
+        }
+    }
+}
+
 pub unsafe extern "C" fn _read_mac(mac: *mut u8, mac_type: u32) -> i32 {
-    if mac_type > MACType::Ethernet as u32 {
-        wdprintln!("_read_mac({:x} , {}) -> FALSE ", mac as u32, mac_type);
-        return FALSE;
+    if mac.is_null() {
+        weprintln!("_read_mac() passed NULL");
+        return ESP_ERR_INVALID_ARG;
     }
 
-    let mut efuse_mac = esp32_hal::efuse::Efuse::get_mac_address();
-    efuse_mac[5] += mac_type as u8;
+    match MACType::try_from(mac_type) {
+        Err(_) => {
+            weprintln!("_read_mac({:x} , {}) -> INVALID_ARG", mac as u32, mac_type);
+            ESP_ERR_INVALID_ARG
+        },
+        Ok(mac_type) => {
+            let mut efuse_mac = esp32_hal::efuse::Efuse::get_mac_address();
+            core::ptr::copy(
+                &mut efuse_mac as *mut _ as *mut u8,
+                mac,
+                core::mem::size_of_val(&efuse_mac),
+            );
+            *mac.add(5) += mac_type as u8;
 
-    core::ptr::copy(
-        &mut efuse_mac as *mut _ as *mut u8,
-        mac,
-        core::mem::size_of_val(&efuse_mac),
-    );
-
-    wdprintln!(
-        "_read_mac({:x} -> {:x?}, {}) -> TRUE ",
-        mac as u32,
-        efuse_mac,
-        mac_type
-    );
-    TRUE
+            wdprintln!(
+                "_read_mac({:x} -> {:x}:{:x}:{:x}:{:x}:{:x}:{:x}, {:?}) -> OK",
+                mac as u32,
+                *mac, *mac.add(1), *mac.add(2), *mac.add(3), *mac.add(4), *mac.add(5),
+                mac_type
+            );
+            ESP_OK
+        }
+    }
 }
 pub unsafe extern "C" fn _timer_arm(ptimer: *mut c_void, tmout: u32, repeat: bool) {
     wdprintln!("_timer_arm({:x}, {}, {})", ptimer as u32, tmout, repeat);
