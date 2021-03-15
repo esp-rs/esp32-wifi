@@ -1,4 +1,4 @@
 [submodule "esp32-wifi-lib"]
 	path = esp32-wifi-lib
 	url = git@github.com:espressif/esp32-wifi-lib.git
-	branch = release/v4.1
+	branch = release/v4.2

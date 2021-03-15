@@ -217,6 +217,7 @@ pub unsafe extern "C" fn ccmp_decrypt(
     data: *const u8,
     data_len: usize,
     decrypted_len: *mut usize,
+    espnow_pkt: bool,
 ) -> *mut u8 {
     unimplemented!();
 }

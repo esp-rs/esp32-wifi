@@ -2,7 +2,7 @@
 
 use crate::compatibility::crypto::WPA_CRYPTO_FUNCS;
 use crate::compatibility::osi::WIFI_OS_FUNCS;
-use crate::wprintln;
+use crate::wdprintln;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
@@ -74,9 +74,9 @@ unsafe extern "C" fn system_event_handler(
     event_data_size: usize,
     ticks_to_wait: TickType_t,
 ) -> esp_err_t {
-    wprintln!(
-        "system_event_handler({:x}, {}, {:x}, {}, {})",
-        event_base as u32,
+    wdprintln!(
+        "system_event_handler({}, {}, {:x}, {}, {})",
+        cstr_core::CStr::from_ptr(event_base).to_str().unwrap(),
         event_id,
         event_data as u32,
         event_data_size,
@@ -123,12 +123,12 @@ impl<'a, 'b> WiFi<'a, 'b> {
                 tx_buf_type: 1,
                 static_tx_buf_num: 0,
                 dynamic_tx_buf_num: 32,
+                cache_tx_buf_num: 32,
                 csi_enable: 0,
                 ampdu_rx_enable: 1,
                 ampdu_tx_enable: 1,
                 nvs_enable: 0,
                 nano_enable: 0,
-                tx_ba_win: 6,
                 rx_ba_win: 6,
                 wifi_task_core_id: 0,
                 beacon_max_len: 752,
@@ -137,10 +137,10 @@ impl<'a, 'b> WiFi<'a, 'b> {
                 magic: 0x1F2F3F4F,
             };
 
-            wprintln!("test1");
+            wdprintln!("test1");
             let wifi_static = Some(core::mem::transmute::<_, WiFi<'static, 'static>>(wifi));
             WIFI = wifi_static;
-            wprintln!("test2");
+            wdprintln!("test2");
 
             if let Some(error) = Error::from(crate::binary::wifi::esp_wifi_init_internal(&config)) {
                 return Err(error);

@@ -32,7 +32,7 @@ fn alloc_error_handler(layout: core::alloc::Layout) -> ! {
     );
 }
 
-static TIMER_HANDLER: TimerInterruptHandler<Timer<esp32::TIMG0, esp32_hal::timer::TimerLact>> =
+static TIMER_HANDLER: TimerInterruptHandler<Timer<esp32_hal::target::TIMG0, esp32_hal::timer::TimerLact>> =
     TimerInterruptHandler::new();
 
 #[interrupt]
@@ -144,7 +144,9 @@ fn main() -> ! {
 
             writeln!(serial, "start scan:").unwrap();
 
+            let start_ns = clkcntrl_config.rtc_nanoseconds();
             let count = wifi.scan().unwrap();
+            writeln!(serial, "scan took {}", clkcntrl_config.rtc_nanoseconds() - start_ns).unwrap();
 
             writeln!(serial, "\n\nAP's found: {}", count).unwrap();
 
