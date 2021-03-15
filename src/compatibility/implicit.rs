@@ -72,7 +72,7 @@ pub unsafe extern "C" fn esp_dport_access_reg_read(mut reg: u32) -> u32 {
     let mut _apb: u32 = 0;
     let mut _int_lvl: u32 = 0;
     llvm_asm! (r#"
-        rsil $2, 7
+        rsil $2, 5
         movi $0, 0x3ff40078
         l32i $0, $0, 0
         l32i $1, $1, 0
