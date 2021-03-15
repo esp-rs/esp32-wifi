@@ -209,13 +209,13 @@ pub unsafe extern "C" fn strncpy(dst: *mut c_char, src: *const c_char, n: usize)
     );
 
     for i in 0..n {
+        *dst.add(i) = *src.add(i);
         if *dst.add(i) == 0 {
             for j in i..n {
                 *dst.add(j) = 0;
             }
             break;
         }
-        *dst.add(i) = *src.add(i);
     }
 
     dst
