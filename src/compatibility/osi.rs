@@ -35,9 +35,12 @@ struct Queue {
 impl Queue {
     pub unsafe fn use_raw<T>(address: *mut cty::c_void, f: impl FnOnce(&mut Queue) -> T) -> T {
         let mut queue = Box::from_raw(address as *mut Queue);
-        queue.lock.acquire();
-        let res = f(&mut queue);
-        queue.lock.release();
+        let res = InterruptManager::run(|mgr| {
+            mgr.enter_critical(&mut queue.lock);
+            let res = f(&mut queue);
+            mgr.exit_critical(&mut queue.lock);
+            res
+        });
         Box::leak(queue);
         res
     }
@@ -511,7 +514,6 @@ pub unsafe extern "C" fn _queue_send_from_isr(
     item: *mut c_void,
     hptw: *mut c_void,
 ) -> i32 {
-    wwprintln!("WARNING: _queue_send_from_isr() using non-isr variant!");
     let ret = _queue_send(queue, item, u32::MAX);
     if !hptw.is_null() {
         *core::mem::transmute::<_, *mut cty::c_int>(hptw) = 0;
