@@ -2,7 +2,7 @@
 
 use crate::compatibility::crypto::WPA_CRYPTO_FUNCS;
 use crate::compatibility::osi::WIFI_OS_FUNCS;
-use crate::wprintln;
+use crate::wdprintln;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
@@ -74,7 +74,7 @@ unsafe extern "C" fn system_event_handler(
     event_data_size: usize,
     ticks_to_wait: TickType_t,
 ) -> esp_err_t {
-    wprintln!(
+    wdprintln!(
         "system_event_handler({}, {}, {:x}, {}, {})",
         cstr_core::CStr::from_ptr(event_base).to_str().unwrap(),
         event_id,
@@ -137,10 +137,10 @@ impl<'a, 'b> WiFi<'a, 'b> {
                 magic: 0x1F2F3F4F,
             };
 
-            wprintln!("test1");
+            wdprintln!("test1");
             let wifi_static = Some(core::mem::transmute::<_, WiFi<'static, 'static>>(wifi));
             WIFI = wifi_static;
-            wprintln!("test2");
+            wdprintln!("test2");
 
             if let Some(error) = Error::from(crate::binary::wifi::esp_wifi_init_internal(&config)) {
                 return Err(error);

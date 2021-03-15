@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use crate::wprintln;
+use crate::{wdprintln, weprintln, wiprintln, wtprintln};
 use crate::compatibility::spinlock::SpinLock;
 use crate::compatibility::interrupts::InterruptManager;
 use cty::{c_char, c_int, c_uint, c_void};
@@ -19,7 +19,7 @@ static mut PHY_SPINLOCK: SpinLock = SpinLock::new();
 
 #[no_mangle]
 pub unsafe extern "C" fn phy_enter_critical() -> c_uint {
-    wprintln!("phy_enter_critical()");
+    wtprintln!("phy_enter_critical()");
 
     InterruptManager::run(|mgr| mgr.enter_critical(&mut PHY_SPINLOCK));
     0
@@ -27,14 +27,14 @@ pub unsafe extern "C" fn phy_enter_critical() -> c_uint {
 
 #[no_mangle]
 pub unsafe extern "C" fn phy_exit_critical(_level: c_uint) {
-    wprintln!("phy_exit_critical({})", _level);
+    wtprintln!("phy_exit_critical({})", _level);
 
     InterruptManager::run(|mgr| mgr.exit_critical(&mut PHY_SPINLOCK));
 }
 
 //#[no_mangle]
 //unsafe extern "C" fn phy_printf(fmt: *const c_char, ...) -> c_int {
-//    wprintln!(
+//    wdprintln!(
 //        "phy_printf({})",
 //        cstr_core::CStr::from_ptr(fmt).to_str().unwrap()
 //    );
@@ -44,7 +44,7 @@ pub unsafe extern "C" fn phy_exit_critical(_level: c_uint) {
 
 //#[no_mangle]
 //unsafe extern "C" fn net80211_printf(fmt: *const c_char, ...) -> c_int {
-//    wprintln!(
+//    wdprintln!(
 //        "net80211_printf({})",
 //        cstr_core::CStr::from_ptr(fmt).to_str().unwrap()
 //    );
@@ -66,7 +66,7 @@ pub unsafe extern "C" fn temprature_sens_read() -> u8 {
 
 #[no_mangle]
 pub unsafe extern "C" fn esp_dport_access_reg_read(mut reg: u32) -> u32 {
-    wprintln!("esp_dport_access_reg_read({:x})", reg);
+    wdprintln!("esp_dport_access_reg_read({:x})", reg);
     // TODO: implement dport workaround
 
     let mut _apb: u32 = 0;
@@ -85,7 +85,7 @@ pub unsafe extern "C" fn esp_dport_access_reg_read(mut reg: u32) -> u32 {
 
 #[no_mangle]
 pub unsafe extern "C" fn rtc_get_xtal() -> u32 {
-    wprintln!("rtc_get_xtal()");
+    wdprintln!("rtc_get_xtal()");
 
     esp32_hal::clock_control::ClockControlConfig {}.xtal_frequency() / Hertz(1_000_000)
 }
@@ -95,14 +95,14 @@ pub unsafe extern "C" fn rtc_get_xtal() -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn roundup2(x: c_int, size: c_int) -> c_int {
     let res = (x + (size - 1)) & (-size);
-    wprintln!("roundup2({}, {}) -> {}", x, size, res);
+    wdprintln!("roundup2({}, {}) -> {}", x, size, res);
     res
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn __popcountsi2(x: c_int) -> c_uint {
     let res = x.count_ones();
-    wprintln!("__popcountsi2({}) -> {}", x, res);
+    wdprintln!("__popcountsi2({}) -> {}", x, res);
     res
 }
 
@@ -128,7 +128,7 @@ pub unsafe extern "C" fn gpio_output_set_high(
 
 #[no_mangle]
 pub unsafe extern "C" fn intr_matrix_set(cpu_no: c_int, model_num: c_uint, intr_num: c_uint) {
-    wprintln!("intr_matrix_set({},{},{})", cpu_no, model_num, intr_num);
+    wdprintln!("intr_matrix_set({},{},{})", cpu_no, model_num, intr_num);
     // TODO: implement routine or refer to ROM
 
     // FIXME: for some reason we end up with livelock before getting to the scan if we use the ROM
@@ -145,20 +145,20 @@ pub unsafe extern "C" fn intr_matrix_set(cpu_no: c_int, model_num: c_uint, intr_
     };
     let interrupt = esp32_hal::interrupt::Interrupt::try_from(model_num as u8).expect("Unknown interrupt number");
     if let Err(err) = esp32_hal::interrupt::enable_with_priority(core, interrupt, esp32_hal::interrupt::InterruptLevel(1)) {
-        wprintln!("ERROR: Failed to enable map interrupt {}", model_num);
+        weprintln!("ERROR: Failed to enable map interrupt {}", model_num);
     }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ets_delay_us(us: c_uint) {
-    wprintln!("ets_delay_us({})", us);
+    wtprintln!("ets_delay_us({})", us);
     let ticks = us.us() * esp32_hal::clock_control::ClockControlConfig {}.cpu_frequency();
     xtensa_lx6::timer::delay(ticks / Ticks(1));
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn phy_get_romfuncs() -> *const c_void {
-    wprintln!("phy_get_romfuncs()");
+    wdprintln!("phy_get_romfuncs()");
 
     // Hardcoded phy_get_romfuncs address in ROM
     core::mem::transmute::<_, unsafe extern "C" fn() -> *const c_void>(0x40004100)()
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn phy_get_romfuncs() -> *const c_void {
 
 #[no_mangle]
 pub unsafe extern "C" fn strnlen(cs: *const c_char, maxlen: usize) -> usize {
-    wprintln!("strnlen({:x}, {})", cs as u32, maxlen);
+    wdprintln!("strnlen({:x}, {})", cs as u32, maxlen);
 
     if cs.is_null() {
         0
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn strnlen(cs: *const c_char, maxlen: usize) -> usize {
 
 #[no_mangle]
 pub unsafe extern "C" fn strlen(cs: *const c_char) -> usize {
-    wprintln!("strlen({:x})", cs as u32);
+    wdprintln!("strlen({:x})", cs as u32);
 
     if cs.is_null() {
         0
@@ -199,14 +199,7 @@ pub unsafe extern "C" fn strlen(cs: *const c_char) -> usize {
 
 #[no_mangle]
 pub unsafe extern "C" fn strncpy(dst: *mut c_char, src: *const c_char, n: usize) -> *mut c_char {
-//    wprintln!(
-//        "strncpy({:x}, {:x}, {}) -> {:x}",
-//        dst as u32,
-//        src as u32,
-//        n,
-//        dst as u32
-//    );
-    wprintln!(
+    wdprintln!(
         "strncpy({:x}, {}, {}) -> {:x}",
         dst as u32,
         cstr_core::CStr::from_ptr(src).to_str().unwrap(),
@@ -256,7 +249,7 @@ pub unsafe extern "C" fn strncmp(cs: *const c_char, ct: *const c_char, n: usize)
 
 //#[no_mangle]
 //pub unsafe extern "C" fn sprintf(s: *mut c_char, format: *const c_char, mut args: ...) -> c_int {
-//    wprintln!(
+//    wdprintln!(
 //        "sprintf({:x}, {})",
 //        s as u32,
 //        cstr_core::CStr::from_ptr(format).to_str().unwrap()
@@ -270,7 +263,7 @@ pub unsafe extern "C" fn strncmp(cs: *const c_char, ct: *const c_char, n: usize)
 
 #[no_mangle]
 pub unsafe extern "C" fn puts(a: *const c_char) -> c_int {
-    wprintln!("{}", cstr_core::CStr::from_ptr(a).to_str().unwrap());
+    wiprintln!("{}", cstr_core::CStr::from_ptr(a).to_str().unwrap());
     true as c_int
 }
 

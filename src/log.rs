@@ -2,7 +2,19 @@
 ///
 use crate::compatibility::spinlock::SpinLock;
 
-pub static mut LOCK: SpinLock = SpinLock::new();
+#[derive(PartialEq, PartialOrd)]
+#[allow(dead_code)]
+pub enum LogLevel {
+    NONE = 0,
+    ERROR = 1,
+    WARN = 2,
+    INFO = 3,
+    DEBUG = 4,
+    TRACE = 5,
+}
+
+pub(crate) const LOG_LEVEL: LogLevel = LogLevel::DEBUG;
+pub(crate) static mut LOCK: SpinLock = SpinLock::new();
 
 #[macro_export]
 macro_rules! fwprintln {
@@ -23,8 +35,46 @@ macro_rules! fwprintln {
 }
 
 #[macro_export]
-macro_rules! wprintln {
+macro_rules! weprintln {
     ($($arg:tt)*) => {
-        crate::fwprintln!($($arg)*);
+        if crate::log::LOG_LEVEL >= crate::log::LogLevel::ERROR {
+            crate::fwprintln!($($arg)*);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! wwprintln {
+    ($($arg:tt)*) => {
+        if crate::log::LOG_LEVEL >= crate::log::LogLevel::WARN {
+            crate::fwprintln!($($arg)*);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! wiprintln {
+    ($($arg:tt)*) => {
+        if crate::log::LOG_LEVEL >= crate::log::LogLevel::INFO {
+            crate::fwprintln!($($arg)*);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! wdprintln {
+    ($($arg:tt)*) => {
+        if crate::log::LOG_LEVEL >= crate::log::LogLevel::DEBUG {
+            crate::fwprintln!($($arg)*);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! wtprintln {
+    ($($arg:tt)*) => {
+        if crate::log::LOG_LEVEL >= crate::log::LogLevel::TRACE {
+            crate::fwprintln!($($arg)*);
+        }
     };
 }
