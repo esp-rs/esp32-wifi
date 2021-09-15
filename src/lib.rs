@@ -4,7 +4,7 @@
 #![feature(const_btree_new)]
 #![feature(llvm_asm)]
 #![feature(associated_type_bounds)]
-#![feature(const_fn)]
+#![feature(const_fn_trait_bound)]
 #![feature(binary_heap_retain)]
 
 extern crate alloc;

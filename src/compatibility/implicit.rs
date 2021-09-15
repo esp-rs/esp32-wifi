@@ -143,7 +143,7 @@ pub unsafe extern "C" fn intr_matrix_set(cpu_no: c_int, model_num: c_uint, intr_
         1 => esp32_hal::Core::APP,
         other => panic!("Unknown CPU core ID"),
     };
-    let interrupt = esp32_hal::interrupt::Interrupt::try_from(model_num as u8).expect("Unknown interrupt number");
+    let interrupt = esp32_hal::interrupt::Interrupt::try_from(model_num as u16).expect("Unknown interrupt number");
     if let Err(err) = esp32_hal::interrupt::enable_with_priority(core, interrupt, esp32_hal::interrupt::InterruptLevel(1)) {
         weprintln!("ERROR: Failed to enable map interrupt {}", model_num);
     }

@@ -286,7 +286,7 @@ pub unsafe extern "C" fn _set_isr(n: i32, f: *mut c_void, arg: *mut c_void) {
 
     let handler = core::mem::transmute::<_, unsafe extern "C" fn(*mut c_void)>(f);
 
-    match Interrupt::try_from(n as u8) {
+    match Interrupt::try_from(n as u16) {
         Ok(Interrupt::WIFI_MAC_INTR) => WIFI_MAC_INTR_HANDLER = Some((handler, arg)),
         Ok(Interrupt::WIFI_MAC_NMI) => WIFI_MAC_NMI_HANDLER = Some((handler, arg)),
         Ok(Interrupt::WIFI_BB_INTR) => WIFI_BB_INTR_HANDLER = Some((handler, arg)),
