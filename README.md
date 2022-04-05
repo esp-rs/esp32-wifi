@@ -1,5 +1,7 @@
 # esp32-wifi
 
+## NOTE: Superceded by [esp-wifi](https://github.com/esp-rs/esp-wifi).
+
 A experimental wifi driver for the [esp32](https://en.wikipedia.org/wiki/ESP32) written in Rust.
 
 Contributions are welcome :)
